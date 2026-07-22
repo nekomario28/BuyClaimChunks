@@ -42,7 +42,7 @@ public class BuyClaimCommand {
         int maxClaims = Config.getMaxExtraClaims();
         int currentClaims = ClaimHelper.getExtraClaims(player);
 
-        if (currentClaims + amount > maxClaims) {
+        if ((long) currentClaims + amount > maxClaims) {
             player.sendSystemMessage(
                     Component.literal("You cannot buy that many extra claim chunks! Maximum of ")
                             .append(Component.literal(String.valueOf(maxClaims)).withStyle(ChatFormatting.LIGHT_PURPLE))
@@ -55,7 +55,7 @@ public class BuyClaimCommand {
         // Item cost
         ResourceLocation itemId = Config.getItemRequired();
         int requiredPerChunk = Config.getAmountRequired();
-        int totalRequired = requiredPerChunk * amount;
+        long totalRequired = (long) requiredPerChunk * amount;
 
         Item requiredItem = ForgeRegistries.ITEMS.getValue(itemId);
         if (requiredItem == null) {
@@ -66,7 +66,7 @@ public class BuyClaimCommand {
         }
 
         // Count items in inventory
-        int playerAmount = 0;
+        long playerAmount = 0;
         for (ItemStack stack : player.getInventory().items) {
             if (stack.getItem() == requiredItem) playerAmount += stack.getCount();
         }
@@ -87,29 +87,38 @@ public class BuyClaimCommand {
         }
 
 
-        // Remove items
-        int remaining = totalRequired;
-        for (ItemStack stack : player.getInventory().items) {
-            if (stack.getItem() == requiredItem) {
-                int remove = Math.min(stack.getCount(), remaining);
-                stack.shrink(remove);
-                remaining -= remove;
-                if (remaining <= 0) break;
-            }
-        }
-
-        // Execute FTB Chunks command
+        // Execute FTB Chunks command before charging the player. If the command
+        // fails (for example after an FTB Chunks command change), no items are lost.
         String ftbCmd = "ftbchunks admin extra_claim_chunks "
                 + player.getName().getString()
                 + " add " + amount;
 
         var server = source.getServer();
-        server.getCommands().performPrefixedCommand(
+        int commandResult = server.getCommands().performPrefixedCommand(
                 server.createCommandSourceStack()
                         .withPermission(4)
                         .withSuppressedOutput(),
                 ftbCmd
         );
+
+        if (commandResult <= 0) {
+            player.sendSystemMessage(
+                    Component.literal("The claim purchase failed. No items were consumed.")
+                            .withStyle(ChatFormatting.RED)
+            );
+            return 0;
+        }
+
+        // Payment is consumed only after FTB Chunks confirms the update.
+        long remaining = totalRequired;
+        for (ItemStack stack : player.getInventory().items) {
+            if (stack.getItem() == requiredItem) {
+                int remove = (int) Math.min(stack.getCount(), remaining);
+                stack.shrink(remove);
+                remaining -= remove;
+                if (remaining <= 0) break;
+            }
+        }
 
         // Success message
         player.sendSystemMessage(
