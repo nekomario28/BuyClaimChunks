@@ -2,15 +2,17 @@ package me.skyadri.buyclaimchunks;
 
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
+import net.minecraft.ChatFormatting;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
-import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Item;
-import net.minecraft.resources.ResourceLocation;
-import net.minecraftforge.registries.ForgeRegistries;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
-import net.minecraft.ChatFormatting;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class BuyClaimCommand {
 
@@ -57,7 +59,9 @@ public class BuyClaimCommand {
         int requiredPerChunk = Config.getAmountRequired();
         long totalRequired = (long) requiredPerChunk * amount;
 
-        Item requiredItem = ForgeRegistries.ITEMS.getValue(itemId);
+        Item requiredItem = itemId == null
+                ? null
+                : BuiltInRegistries.ITEM.getOptional(itemId).orElse(null);
         if (requiredItem == null) {
             player.sendSystemMessage(
                     Component.literal("The configured item for buying claim chunks does not exist!").withStyle(ChatFormatting.RED)
@@ -94,14 +98,16 @@ public class BuyClaimCommand {
                 + " add " + amount;
 
         var server = source.getServer();
-        int commandResult = server.getCommands().performPrefixedCommand(
+        AtomicInteger commandResult = new AtomicInteger();
+        server.getCommands().performPrefixedCommand(
                 server.createCommandSourceStack()
                         .withPermission(4)
-                        .withSuppressedOutput(),
+                        .withSuppressedOutput()
+                        .withCallback((success, result) -> commandResult.set(success ? result : 0)),
                 ftbCmd
         );
 
-        if (commandResult <= 0) {
+        if (commandResult.get() <= 0) {
             player.sendSystemMessage(
                     Component.literal("The claim purchase failed. No items were consumed.")
                             .withStyle(ChatFormatting.RED)

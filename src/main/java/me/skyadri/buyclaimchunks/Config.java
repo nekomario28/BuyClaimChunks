@@ -1,24 +1,22 @@
 package me.skyadri.buyclaimchunks;
 
 import net.minecraft.resources.ResourceLocation;
-import net.minecraftforge.common.ForgeConfigSpec;
-import net.minecraftforge.fml.common.Mod;
+import net.neoforged.neoforge.common.ModConfigSpec;
 
-@Mod.EventBusSubscriber
 public class Config {
 
-    public static final ForgeConfigSpec.Builder BUILDER = new ForgeConfigSpec.Builder();
-    public static final ForgeConfigSpec SPEC;
+    public static final ModConfigSpec.Builder BUILDER = new ModConfigSpec.Builder();
+    public static final ModConfigSpec SPEC;
 
     // ---------------- CONFIG OPTIONS ----------------
     // Item required to buy a claim chunk
-    public static final ForgeConfigSpec.ConfigValue<String> ITEM_REQUIRED;
+    public static final ModConfigSpec.ConfigValue<String> ITEM_REQUIRED;
 
     // Amount of the item required
-    public static final ForgeConfigSpec.IntValue AMOUNT_REQUIRED;
+    public static final ModConfigSpec.IntValue AMOUNT_REQUIRED;
 
     // Maximum number of extra claim chunks a player can buy
-    public static final ForgeConfigSpec.IntValue MAX_EXTRA_CLAIMS;
+    public static final ModConfigSpec.IntValue MAX_EXTRA_CLAIMS;
 
     static {
         BUILDER.comment("BuyClaimChunks Mod Configuration").push("general");
@@ -42,7 +40,7 @@ public class Config {
     // ---------------- HELPER METHODS ----------------
     /** Returns the configured item as a ResourceLocation */
     public static ResourceLocation getItemRequired() {
-        return new ResourceLocation(ITEM_REQUIRED.get());
+        return ResourceLocation.tryParse(ITEM_REQUIRED.get());
     }
 
     /** Returns the configured amount of the item required */
