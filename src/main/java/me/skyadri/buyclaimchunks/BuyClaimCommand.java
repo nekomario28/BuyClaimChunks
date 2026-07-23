@@ -2,15 +2,16 @@ package me.skyadri.buyclaimchunks;
 
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
+import com.mojang.brigadier.exceptions.CommandSyntaxException;
+import net.minecraft.ChatFormatting;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
-import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Item;
-import net.minecraft.resources.ResourceLocation;
-import net.minecraftforge.registries.ForgeRegistries;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
-import net.minecraft.ChatFormatting;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
 
 public class BuyClaimCommand {
 
@@ -39,6 +40,17 @@ public class BuyClaimCommand {
         }
 
         // Config and max claims
+        int maxPurchaseAmount = Config.getMaxPurchaseAmount();
+        if (amount > maxPurchaseAmount) {
+            player.sendSystemMessage(
+                    Component.literal("You can buy at most ")
+                            .append(Component.literal(String.valueOf(maxPurchaseAmount)).withStyle(ChatFormatting.LIGHT_PURPLE))
+                            .append(Component.literal(" extra claim chunks at once!"))
+                            .withStyle(ChatFormatting.RED)
+            );
+            return 0;
+        }
+
         int maxClaims = Config.getMaxExtraClaims();
         int currentClaims = ClaimHelper.getExtraClaims(player);
 
@@ -54,10 +66,25 @@ public class BuyClaimCommand {
 
         // Item cost
         ResourceLocation itemId = Config.getItemRequired();
-        int requiredPerChunk = Config.getAmountRequired();
-        long totalRequired = (long) requiredPerChunk * amount;
+        long totalRequired = PricingCalculator.totalPrice(
+                currentClaims,
+                amount,
+                Config.getAmountRequired(),
+                Config.getPriceGrowthFactor(),
+                Config.getPriceExponent()
+        );
 
-        Item requiredItem = ForgeRegistries.ITEMS.getValue(itemId);
+        if (totalRequired == Long.MAX_VALUE) {
+            player.sendSystemMessage(
+                    Component.literal("The calculated purchase cost is too large. Check the server configuration.")
+                            .withStyle(ChatFormatting.RED)
+            );
+            return 0;
+        }
+
+        Item requiredItem = itemId == null
+                ? null
+                : BuiltInRegistries.ITEM.getOptional(itemId).orElse(null);
         if (requiredItem == null) {
             player.sendSystemMessage(
                     Component.literal("The configured item for buying claim chunks does not exist!").withStyle(ChatFormatting.RED)
@@ -94,12 +121,17 @@ public class BuyClaimCommand {
                 + " add " + amount;
 
         var server = source.getServer();
-        int commandResult = server.getCommands().performPrefixedCommand(
-                server.createCommandSourceStack()
-                        .withPermission(4)
-                        .withSuppressedOutput(),
-                ftbCmd
-        );
+        int commandResult;
+        try {
+            commandResult = server.getCommands().getDispatcher().execute(
+                    ftbCmd,
+                    server.createCommandSourceStack()
+                            .withPermission(4)
+                            .withSuppressedOutput()
+            );
+        } catch (CommandSyntaxException exception) {
+            commandResult = 0;
+        }
 
         if (commandResult <= 0) {
             player.sendSystemMessage(

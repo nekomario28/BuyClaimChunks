@@ -11,9 +11,9 @@ public class ClaimHelper {
         if (player == null) return 0; // safety check
 
         ClaimedChunkManager manager = FTBChunksAPI.api().getManager();
-        ChunkTeamData data = manager.getOrCreateData(player);
+        ChunkTeamData data = manager.getPersonalData(player.getUUID());
 
-        return data.getExtraClaimChunks();
+        return data == null ? 0 : data.getExtraClaimChunks();
     }
 
 }
