@@ -1,0 +1,13 @@
+BuyClaimChunks Continued
+Copyright (c) 2026 Yuu (nekomario28)
+
+This project is a maintained fork of BuyClaimChunks by SkyAdri:
+https://github.com/SkyAdri-mc/BuyClaimChunks
+
+The original project is published under the MIT License on CurseForge:
+https://www.curseforge.com/minecraft/mc-mods/buyclaimchunks
+
+This fork adds NeoForge 1.21.1 support, safer purchase transactions,
+configurable progressive pricing, tests, documentation, and independent
+branding. It is not affiliated with or endorsed by SkyAdri, FTB, Mojang,
+NeoForge, Modrinth, or CurseForge.
