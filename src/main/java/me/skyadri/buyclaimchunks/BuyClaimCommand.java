@@ -2,6 +2,7 @@ package me.skyadri.buyclaimchunks;
 
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
+import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import net.minecraft.ChatFormatting;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
@@ -11,8 +12,6 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
-
-import java.util.concurrent.atomic.AtomicInteger;
 
 public class BuyClaimCommand {
 
@@ -98,16 +97,19 @@ public class BuyClaimCommand {
                 + " add " + amount;
 
         var server = source.getServer();
-        AtomicInteger commandResult = new AtomicInteger();
-        server.getCommands().performPrefixedCommand(
-                server.createCommandSourceStack()
-                        .withPermission(4)
-                        .withSuppressedOutput()
-                        .withCallback((success, result) -> commandResult.set(success ? result : 0)),
-                ftbCmd
-        );
+        int commandResult;
+        try {
+            commandResult = server.getCommands().getDispatcher().execute(
+                    ftbCmd,
+                    server.createCommandSourceStack()
+                            .withPermission(4)
+                            .withSuppressedOutput()
+            );
+        } catch (CommandSyntaxException exception) {
+            commandResult = 0;
+        }
 
-        if (commandResult.get() <= 0) {
+        if (commandResult <= 0) {
             player.sendSystemMessage(
                     Component.literal("The claim purchase failed. No items were consumed.")
                             .withStyle(ChatFormatting.RED)
