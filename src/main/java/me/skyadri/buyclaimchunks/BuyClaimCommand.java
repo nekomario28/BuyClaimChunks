@@ -40,6 +40,17 @@ public class BuyClaimCommand {
         }
 
         // Config and max claims
+        int maxPurchaseAmount = Config.getMaxPurchaseAmount();
+        if (amount > maxPurchaseAmount) {
+            player.sendSystemMessage(
+                    Component.literal("You can buy at most ")
+                            .append(Component.literal(String.valueOf(maxPurchaseAmount)).withStyle(ChatFormatting.LIGHT_PURPLE))
+                            .append(Component.literal(" extra claim chunks at once!"))
+                            .withStyle(ChatFormatting.RED)
+            );
+            return 0;
+        }
+
         int maxClaims = Config.getMaxExtraClaims();
         int currentClaims = ClaimHelper.getExtraClaims(player);
 
@@ -55,8 +66,21 @@ public class BuyClaimCommand {
 
         // Item cost
         ResourceLocation itemId = Config.getItemRequired();
-        int requiredPerChunk = Config.getAmountRequired();
-        long totalRequired = (long) requiredPerChunk * amount;
+        long totalRequired = PricingCalculator.totalPrice(
+                currentClaims,
+                amount,
+                Config.getAmountRequired(),
+                Config.getPriceGrowthFactor(),
+                Config.getPriceExponent()
+        );
+
+        if (totalRequired == Long.MAX_VALUE) {
+            player.sendSystemMessage(
+                    Component.literal("The calculated purchase cost is too large. Check the server configuration.")
+                            .withStyle(ChatFormatting.RED)
+            );
+            return 0;
+        }
 
         Item requiredItem = itemId == null
                 ? null

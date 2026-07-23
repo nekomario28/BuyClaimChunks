@@ -55,6 +55,10 @@ dependencies {
     implementation "dev.ftb.mods:ftb-library-neoforge:${ftb_library_version}"
     implementation "dev.ftb.mods:ftb-teams-neoforge:${ftb_teams_version}"
     implementation "dev.ftb.mods:ftb-chunks-neoforge:${ftb_chunks_version}"
+
+    testImplementation platform('org.junit:junit-bom:5.14.2')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
 def generateModMetadata = tasks.register('generateModMetadata', ProcessResources) {
@@ -83,4 +87,8 @@ neoForge.ideSyncTask generateModMetadata
 
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
+}
+
+tasks.named('test', Test) {
+    useJUnitPlatform()
 }
