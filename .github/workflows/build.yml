@@ -1,0 +1,49 @@
+name: Build
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Test and build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-provider: basic
+          validate-wrappers: true
+
+      - name: Run tests and build
+        run: ./gradlew clean test build --no-daemon --stacktrace
+
+      - name: Upload build output
+        uses: actions/upload-artifact@v7
+        with:
+          name: buyclaimchunks-${{ github.sha }}
+          path: |
+            build/libs/*.jar
+            build/reports/tests/test/
+          if-no-files-found: error
+          retention-days: 14
