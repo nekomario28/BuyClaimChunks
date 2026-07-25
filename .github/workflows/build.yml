@@ -39,7 +39,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          ./gradlew clean test build --no-daemon --stacktrace | tee build.log
+          ./gradlew clean test build --no-daemon --stacktrace 2>&1 | tee build.log
 
       - name: Verify packaged release JAR
         run: bash scripts/verify-release-jar.sh
@@ -48,7 +48,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          ./gradlew runGameTestServer --no-daemon --console=plain | tee gametest.log
+          ./gradlew runGameTestServer --no-daemon --console=plain 2>&1 | tee gametest.log
 
       - name: Run FTB Chunks purchase and restart integration
         run: bash scripts/run-ftb-restart-integration.sh
