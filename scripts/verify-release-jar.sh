@@ -31,6 +31,7 @@ required_entries=(
   me/skyadri/buyclaimchunks/BuyClaimChunks.class
   me/skyadri/buyclaimchunks/BuyClaimCommand.class
   me/skyadri/buyclaimchunks/BuyClaimChunksGameTests.class
+  me/skyadri/buyclaimchunks/BuyClaimChunksRestartIntegrationGameTests.class
   data/buyclaimchunks/structure/empty.nbt
 )
 
@@ -40,6 +41,14 @@ for required in "${required_entries[@]}"; do
     exit 1
   fi
 done
+
+# The integration harness must remain usable with the normal production
+# dependency set. It intentionally uses a vanilla ServerPlayer and must not
+# introduce a runtime dependency on NeoForge's separately published test mod.
+if unzip -p "$jar_file" | strings | grep -Fq 'net/neoforged/testframework'; then
+  printf 'Release JAR unexpectedly references the optional NeoForge test framework.\n' >&2
+  exit 1
+fi
 
 mod_version=$(sed -n 's/^mod_version=//p' gradle.properties)
 mod_authors=$(sed -n 's/^mod_authors=//p' gradle.properties)
