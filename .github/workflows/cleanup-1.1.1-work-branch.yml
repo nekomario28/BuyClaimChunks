@@ -1,0 +1,41 @@
+name: Clean up 1.1.1 work branch
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/cleanup-1.1.1-work-branch.yml
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Delete merged maintenance branch
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const branch = 'maintenance/1.1.1-hardening';
+
+            const pulls = await github.paginate(
+              github.rest.pulls.list,
+              { owner, repo, state: 'closed', head: `${owner}:${branch}`, per_page: 100 }
+            );
+            if (!pulls.some((pull) => pull.merged_at !== null)) {
+              core.setFailed(`Refusing to delete ${branch}: no merged pull request found.`);
+              return;
+            }
+
+            await github.rest.git.deleteRef({
+              owner,
+              repo,
+              ref: `heads/${branch}`
+            });
+            core.info(`Deleted ${branch}`);
