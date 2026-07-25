@@ -215,7 +215,6 @@ public final class BuyClaimChunksRestartIntegrationGameTests {
         player.setYRot(180.0F);
         player.connection.chunkSender.sendNextChunks(player);
         player.connection.chunkSender.onChunkBatchReceivedByClient(64.0F);
-        player.connection.markClientLoaded();
         return player;
     }
 
