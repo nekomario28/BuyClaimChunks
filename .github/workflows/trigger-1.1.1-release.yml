@@ -1,0 +1,50 @@
+name: Trigger 1.1.1 release
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/trigger-1.1.1-release.yml
+
+permissions:
+  contents: write
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Check out full history
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Tag the validated 1.1.1 merge commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag='v1.1.1'
+          target_sha=$(git rev-parse HEAD^)
+          target_version=$(git show "${target_sha}:gradle.properties" | sed -n 's/^mod_version=//p')
+
+          if [[ "$target_version" != '1.1.1' ]]; then
+            echo "Refusing to tag $target_sha: project version is $target_version." >&2
+            exit 1
+          fi
+
+          if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+            existing_sha=$(git rev-list -n 1 "$tag")
+            if [[ "$existing_sha" == "$target_sha" ]]; then
+              echo "$tag already points to $target_sha."
+              exit 0
+            fi
+            echo "$tag already exists at $existing_sha, expected $target_sha." >&2
+            exit 1
+          fi
+
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git tag -a "$tag" "$target_sha" -m 'BuyClaimChunks Continued 1.1.1'
+          git push origin "refs/tags/$tag"
