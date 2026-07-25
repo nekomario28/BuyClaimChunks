@@ -286,16 +286,28 @@ Stop the server, edit the server-side `config/buyclaimchunks-common.toml`, save 
 
 ## 🧪 Building from source
 
-Use Java 21:
+Use Java 21. Run unit tests and build the release JAR:
 
 ```shell
 ./gradlew clean test build
 ```
 
+Run the NeoForge GameTest server:
+
+```shell
+./gradlew runGameTestServer
+```
+
+Verify the packaged JAR contents and metadata:
+
+```shell
+bash scripts/verify-release-jar.sh
+```
+
 The JAR is generated at:
 
 ```text
-build/libs/buyclaimchunks-continued-neoforge-1.21.1-1.1.0.jar
+build/libs/buyclaimchunks-continued-neoforge-1.21.1-1.1.1.jar
 ```
 
 Run a development dedicated server with:
@@ -304,7 +316,7 @@ Run a development dedicated server with:
 ./gradlew runServer
 ```
 
-GitHub Actions runs tests, builds the JAR, starts a clean dedicated server, and requires it to reach Minecraft's `Done` startup message.
+GitHub Actions runs unit tests, validates the packaged JAR, executes NeoForge GameTests, starts a clean dedicated server, and requires it to reach Minecraft's `Done` startup message. Tags matching the project version are also validated before a GitHub Release and SHA-256 checksum are published.
 
 ## 🐛 Reporting problems
 
