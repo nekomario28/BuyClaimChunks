@@ -1,0 +1,70 @@
+name: One-time merged branch cleanup
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/branch-cleanup.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  cleanup:
+    name: Delete merged work branches
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Delete merged branches except maintained lines
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const keep = new Set(['main', 'forge-1.20.1']);
+
+            const branches = await github.paginate(
+              github.rest.repos.listBranches,
+              { owner, repo, per_page: 100 }
+            );
+
+            for (const branch of branches) {
+              const name = branch.name;
+
+              if (keep.has(name)) {
+                core.info(`Keeping maintained branch: ${name}`);
+                continue;
+              }
+
+              const openPulls = await github.paginate(
+                github.rest.pulls.list,
+                { owner, repo, state: 'open', head: `${owner}:${name}`, per_page: 100 }
+              );
+
+              if (openPulls.length > 0) {
+                core.info(`Keeping branch with an open pull request: ${name}`);
+                continue;
+              }
+
+              const closedPulls = await github.paginate(
+                github.rest.pulls.list,
+                { owner, repo, state: 'closed', head: `${owner}:${name}`, per_page: 100 }
+              );
+
+              const wasMerged = closedPulls.some((pull) => pull.merged_at !== null);
+              if (!wasMerged) {
+                core.info(`Keeping branch without a merged pull request: ${name}`);
+                continue;
+              }
+
+              await github.rest.git.deleteRef({
+                owner,
+                repo,
+                ref: `heads/${name}`
+              });
+              core.info(`Deleted merged work branch: ${name}`);
+            }
