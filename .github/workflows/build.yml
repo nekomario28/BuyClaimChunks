@@ -15,9 +15,9 @@ concurrency:
 
 jobs:
   build:
-    name: Test, package, GameTest, and smoke test
+    name: Test, package, GameTest, restart integration, and smoke test
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
 
     steps:
       - name: Check out repository
@@ -46,6 +46,9 @@ jobs:
         run: |
           set -o pipefail
           ./gradlew runGameTestServer --no-daemon --console=plain | tee gametest.log
+
+      - name: Run FTB Chunks purchase and restart integration
+        run: bash scripts/run-ftb-restart-integration.sh
 
       - name: Smoke test dedicated server
         shell: bash
@@ -96,6 +99,9 @@ jobs:
             build/libs/*.jar
             build/reports/tests/test/
             gametest.log
+            integration-seed.log
+            integration-verify.log
+            run-integration/purchase-state.properties
             server-smoke.log
           if-no-files-found: error
           retention-days: 14
@@ -107,8 +113,14 @@ jobs:
           name: test-diagnostics-${{ github.sha }}
           path: |
             gametest.log
+            integration-seed.log
+            integration-verify.log
             server-smoke.log
             run/logs/latest.log
             run/crash-reports/
+            run-integration/purchase-state.properties
+            run-integration/logs/latest.log
+            run-integration/crash-reports/
+            run-integration/**/ftbchunks/**
           if-no-files-found: warn
           retention-days: 14
