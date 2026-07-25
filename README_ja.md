@@ -286,16 +286,28 @@ FTB Chunks上の現在の個人追加枠値を確認してください。管理�
 
 ## 🧪 ソースからビルドする
 
-Java 21を使用します。
+Java 21を使用します。単体テストとリリースJARのビルドを実行します。
 
 ```shell
 ./gradlew clean test build
 ```
 
+NeoForge GameTestサーバーを実行します。
+
+```shell
+./gradlew runGameTestServer
+```
+
+生成されたJARの内容とメタデータを検証します。
+
+```shell
+bash scripts/verify-release-jar.sh
+```
+
 JARは次の場所に生成されます。
 
 ```text
-build/libs/buyclaimchunks-continued-neoforge-1.21.1-1.1.0.jar
+build/libs/buyclaimchunks-continued-neoforge-1.21.1-1.1.1.jar
 ```
 
 開発用の専用サーバーは次のコマンドで起動できます。
@@ -304,7 +316,7 @@ build/libs/buyclaimchunks-continued-neoforge-1.21.1-1.1.0.jar
 ./gradlew runServer
 ```
 
-GitHub Actionsではテスト、JARビルド、クリーンな専用サーバー起動を実行し、Minecraftの`Done`メッセージへ到達することを確認します。
+GitHub Actionsでは単体テスト、完成JAR検査、NeoForge GameTest、クリーンな専用サーバー起動を実行し、Minecraftの`Done`メッセージへ到達することを確認します。プロジェクトのバージョンと一致するタグでは、検証後にGitHub ReleaseとSHA-256チェックサムも公開します。
 
 ## 🐛 不具合を報告する
 

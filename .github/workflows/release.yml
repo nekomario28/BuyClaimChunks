@@ -1,0 +1,103 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Validate and publish GitHub Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Check out tagged source
+        uses: actions/checkout@v6
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-provider: basic
+          validate-wrappers: true
+
+      - name: Verify tag matches project version
+        shell: bash
+        run: |
+          set -euo pipefail
+          mod_version=$(sed -n 's/^mod_version=//p' gradle.properties)
+          expected_tag="v${mod_version}"
+          if [[ "$GITHUB_REF_NAME" != "$expected_tag" ]]; then
+            echo "Tag $GITHUB_REF_NAME does not match project version $expected_tag." >&2
+            exit 1
+          fi
+
+      - name: Run unit tests and build
+        run: ./gradlew clean test build --no-daemon --stacktrace
+
+      - name: Verify packaged release JAR
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/verify-release-jar.sh > release-jar-path.txt
+
+      - name: Run NeoForge GameTests
+        shell: bash
+        run: |
+          set -o pipefail
+          ./gradlew runGameTestServer --no-daemon --console=plain | tee gametest.log
+
+      - name: Prepare release files and notes
+        shell: bash
+        run: |
+          set -euo pipefail
+          jar_file=$(cat release-jar-path.txt)
+          sha256sum "$jar_file" > "${jar_file}.sha256"
+
+          mod_version=$(sed -n 's/^mod_version=//p' gradle.properties)
+          awk -v version="$mod_version" '
+            $0 ~ "^## " version "( |$)" { capture = 1 }
+            capture && $0 ~ /^## / && $0 !~ ("^## " version "( |$)") { exit }
+            capture { print }
+          ' CHANGELOG.md > release-notes.md
+
+          if [[ ! -s release-notes.md ]]; then
+            echo "No CHANGELOG section found for ${mod_version}." >&2
+            exit 1
+          fi
+
+          printf 'JAR_FILE=%s\n' "$jar_file" >> "$GITHUB_ENV"
+          printf 'SHA_FILE=%s.sha256\n' "$jar_file" >> "$GITHUB_ENV"
+          printf 'MOD_VERSION=%s\n' "$mod_version" >> "$GITHUB_ENV"
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            "$JAR_FILE" \
+            "$SHA_FILE" \
+            --verify-tag \
+            --title "BuyClaimChunks Continued $MOD_VERSION" \
+            --notes-file release-notes.md
+
+      - name: Upload release diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-diagnostics-${{ github.sha }}
+          path: |
+            build/reports/tests/test/
+            gametest.log
+            release-notes.md
+          if-no-files-found: warn
+          retention-days: 14

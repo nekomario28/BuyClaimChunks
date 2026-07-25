@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.1.1 - 2026-07-26
+
+- Normalized the public maintainer metadata to `nekomario28`.
+- Narrowed player-command exception handling to the expected command exception type.
+- Added server log warnings when FTB Chunks rejects an internal extra-claim update.
+- Centralized payment counting and consumption so inventory behavior can be tested independently.
+- Added exact regression tests for the published 31-item and 34-item batch-price examples.
+- Added NeoForge GameTests for command registration, multi-stack payments, insufficient-payment safety, and the default price total.
+- Added packaged-JAR validation for metadata, licensing notices, classes, branding, and the GameTest structure.
+- Added a validated tag-triggered GitHub Release workflow that publishes the JAR and its SHA-256 checksum.
+
 ## 1.1.0 - 2026-07-23
 
 - Added NeoForge support for Minecraft 1.21.1.

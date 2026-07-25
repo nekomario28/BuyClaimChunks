@@ -19,6 +19,12 @@ class PricingCalculatorTest {
     }
 
     @Test
+    void batchPriceMatchesPublishedExamples() {
+        assertEquals(31, PricingCalculator.totalPrice(0, 5, BASE_PRICE, GROWTH_FACTOR, EXPONENT));
+        assertEquals(34, PricingCalculator.totalPrice(8, 3, BASE_PRICE, GROWTH_FACTOR, EXPONENT));
+    }
+
+    @Test
     void batchPriceSumsEveryClaimInTheRange() {
         long expected = PricingCalculator.priceForClaim(9, BASE_PRICE, GROWTH_FACTOR, EXPONENT)
                 + PricingCalculator.priceForClaim(10, BASE_PRICE, GROWTH_FACTOR, EXPONENT)
