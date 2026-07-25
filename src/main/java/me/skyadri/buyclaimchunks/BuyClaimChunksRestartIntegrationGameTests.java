@@ -15,6 +15,7 @@ import net.minecraft.network.protocol.PacketFlow;
 import net.minecraft.network.protocol.common.ClientboundKeepAlivePacket;
 import net.minecraft.network.protocol.common.ServerboundKeepAlivePacket;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.network.CommonListenerCookie;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -23,7 +24,6 @@ import net.minecraft.world.level.GameType;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 import net.neoforged.neoforge.network.registration.NetworkRegistry;
-import net.neoforged.testframework.gametest.GameTestPlayer;
 import org.jetbrains.annotations.Nullable;
 
 import java.io.IOException;
@@ -52,7 +52,7 @@ public final class BuyClaimChunksRestartIntegrationGameTests {
             return;
         }
 
-        GameTestPlayer player;
+        ServerPlayer player;
         try {
             player = makeConnectedPlayer(helper, GameType.SURVIVAL);
         } catch (Exception exception) {
@@ -165,23 +165,22 @@ public final class BuyClaimChunksRestartIntegrationGameTests {
     }
 
     /**
-     * Creates the same connected in-memory player used by NeoForge's test
-     * framework, but accepts the vanilla {@link GameTestHelper} supplied to
-     * annotation-based GameTests. The player is registered in PlayerList, so
-     * Brigadier player arguments and FTB Teams login hooks see a real online
-     * ServerPlayer.
+     * Creates a connected in-memory server player and registers it in PlayerList,
+     * so Brigadier player arguments and FTB Teams login hooks observe the same
+     * lifecycle as a real online player. This uses only Minecraft and NeoForge
+     * runtime classes, so the release JAR does not depend on the optional
+     * NeoForge test framework mod.
      */
-    private static GameTestPlayer makeConnectedPlayer(GameTestHelper helper, GameType gameType) {
+    private static ServerPlayer makeConnectedPlayer(GameTestHelper helper, GameType gameType) {
         CommonListenerCookie cookie = CommonListenerCookie.createInitial(
                 new GameProfile(UUID.randomUUID(), "bclaim-test"),
                 false
         );
-        GameTestPlayer player = new GameTestPlayer(
+        ServerPlayer player = new ServerPlayer(
                 helper.getLevel().getServer(),
                 helper.getLevel(),
                 cookie.gameProfile(),
-                cookie.clientInformation(),
-                helper
+                cookie.clientInformation()
         );
 
         Connection connection = new Connection(PacketFlow.SERVERBOUND) {
