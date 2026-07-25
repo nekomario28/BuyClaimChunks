@@ -61,7 +61,12 @@ jobs:
         run: |
           set -euo pipefail
           jar_file=$(cat release-jar-path.txt)
-          sha256sum "$jar_file" > "${jar_file}.sha256"
+          jar_dir=$(dirname "$jar_file")
+          jar_name=$(basename "$jar_file")
+          (
+            cd "$jar_dir"
+            sha256sum "$jar_name"
+          ) > "${jar_file}.sha256"
 
           mod_version=$(sed -n 's/^mod_version=//p' gradle.properties)
           awk -v version="$mod_version" '
