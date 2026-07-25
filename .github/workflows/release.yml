@@ -4,6 +4,12 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to validate and publish
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -13,10 +19,14 @@ jobs:
     name: Validate and publish GitHub Release
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    env:
+      RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
 
     steps:
       - name: Check out tagged source
         uses: actions/checkout@v6
+        with:
+          ref: ${{ env.RELEASE_TAG }}
 
       - name: Set up Java 21
         uses: actions/setup-java@v5
@@ -36,8 +46,8 @@ jobs:
           set -euo pipefail
           mod_version=$(sed -n 's/^mod_version=//p' gradle.properties)
           expected_tag="v${mod_version}"
-          if [[ "$GITHUB_REF_NAME" != "$expected_tag" ]]; then
-            echo "Tag $GITHUB_REF_NAME does not match project version $expected_tag." >&2
+          if [[ "$RELEASE_TAG" != "$expected_tag" ]]; then
+            echo "Tag $RELEASE_TAG does not match project version $expected_tag." >&2
             exit 1
           fi
 
@@ -88,7 +98,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" \
+          gh release create "$RELEASE_TAG" \
             "$JAR_FILE" \
             "$SHA_FILE" \
             --verify-tag \
