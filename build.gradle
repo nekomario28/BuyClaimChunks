@@ -24,6 +24,9 @@ repositories {
     }
 }
 
+def integrationGameDirectory = file('run-integration')
+def integrationStateFile = new File(integrationGameDirectory, 'purchase-state.properties')
+
 neoForge {
     version = project.neo_version
 
@@ -40,6 +43,24 @@ neoForge {
         gameTestServer {
             type = 'gameTestServer'
             systemProperty 'neoforge.enabledGameTestNamespaces', mod_id
+        }
+
+        integrationSeed {
+            type = 'gameTestServer'
+            gameDirectory = integrationGameDirectory
+            systemProperty 'neoforge.enabledGameTestNamespaces', mod_id
+            systemProperty 'buyclaimchunks.integrationPhase', 'seed'
+            systemProperty 'buyclaimchunks.integrationStateFile', integrationStateFile.absolutePath
+            disableIdeRun()
+        }
+
+        integrationVerify {
+            type = 'gameTestServer'
+            gameDirectory = integrationGameDirectory
+            systemProperty 'neoforge.enabledGameTestNamespaces', mod_id
+            systemProperty 'buyclaimchunks.integrationPhase', 'verify'
+            systemProperty 'buyclaimchunks.integrationStateFile', integrationStateFile.absolutePath
+            disableIdeRun()
         }
 
         configureEach {
