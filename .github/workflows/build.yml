@@ -15,9 +15,9 @@ concurrency:
 
 jobs:
   build:
-    name: Test, package, GameTest, and smoke test
+    name: Test, package, GameTest, restart integration, and smoke test
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
 
     steps:
       - name: Check out repository
@@ -36,7 +36,10 @@ jobs:
           validate-wrappers: true
 
       - name: Run unit tests and build
-        run: ./gradlew clean test build --no-daemon --stacktrace
+        shell: bash
+        run: |
+          set -o pipefail
+          ./gradlew clean test build --no-daemon --stacktrace 2>&1 | tee build.log
 
       - name: Verify packaged release JAR
         run: bash scripts/verify-release-jar.sh
@@ -45,7 +48,10 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          ./gradlew runGameTestServer --no-daemon --console=plain | tee gametest.log
+          ./gradlew runGameTestServer --no-daemon --console=plain 2>&1 | tee gametest.log
+
+      - name: Run FTB Chunks purchase and restart integration
+        run: bash scripts/run-ftb-restart-integration.sh
 
       - name: Smoke test dedicated server
         shell: bash
@@ -95,7 +101,11 @@ jobs:
           path: |
             build/libs/*.jar
             build/reports/tests/test/
+            build.log
             gametest.log
+            integration-seed.log
+            integration-verify.log
+            run-integration/purchase-state.properties
             server-smoke.log
           if-no-files-found: error
           retention-days: 14
@@ -106,9 +116,16 @@ jobs:
         with:
           name: test-diagnostics-${{ github.sha }}
           path: |
+            build.log
             gametest.log
+            integration-seed.log
+            integration-verify.log
             server-smoke.log
             run/logs/latest.log
             run/crash-reports/
+            run-integration/purchase-state.properties
+            run-integration/logs/latest.log
+            run-integration/crash-reports/
+            run-integration/**/ftbchunks/**
           if-no-files-found: warn
           retention-days: 14

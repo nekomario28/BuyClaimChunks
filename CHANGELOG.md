@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Added an end-to-end, two-process NeoForge GameTest that executes the real `/buyclaim` command, verifies FTB Chunks personal quota `0 -> 1`, verifies payment `4 -> 0`, shuts the server down normally, restarts from the same world, and confirms the personal quota reloads as `1`.
+- Added the restart-persistence check to pull-request CI and release validation.
+
 ## 1.1.1 - 2026-07-26
 
 - Normalized the public maintainer metadata to `nekomario28`.
