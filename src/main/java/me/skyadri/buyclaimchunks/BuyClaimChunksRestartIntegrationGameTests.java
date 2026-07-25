@@ -173,7 +173,7 @@ public final class BuyClaimChunksRestartIntegrationGameTests {
      */
     private static GameTestPlayer makeConnectedPlayer(GameTestHelper helper, GameType gameType) {
         CommonListenerCookie cookie = CommonListenerCookie.createInitial(
-                new GameProfile(UUID.randomUUID(), "buyclaim-restart-test"),
+                new GameProfile(UUID.randomUUID(), "bclaim-test"),
                 false
         );
         GameTestPlayer player = new GameTestPlayer(
