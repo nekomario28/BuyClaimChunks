@@ -82,12 +82,6 @@ dependencies {
     implementation "dev.ftb.mods:ftb-teams-neoforge:${ftb_teams_version}"
     implementation "dev.ftb.mods:ftb-chunks-neoforge:${ftb_chunks_version}"
 
-    // The connected mock player used by the restart integration test lives in
-    // NeoForge's separately published test framework. It is available only in
-    // development runs and is not bundled into the release JAR.
-    compileOnly "net.neoforged:testframework:${testframework_version}"
-    runtimeOnly "net.neoforged:testframework:${testframework_version}"
-
     testImplementation platform('org.junit:junit-bom:5.14.2')
     testImplementation 'org.junit.jupiter:junit-jupiter'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
