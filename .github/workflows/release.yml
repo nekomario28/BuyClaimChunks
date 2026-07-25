@@ -18,7 +18,7 @@ jobs:
   release:
     name: Validate and publish GitHub Release
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     env:
       RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
 
@@ -64,7 +64,10 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          ./gradlew runGameTestServer --no-daemon --console=plain | tee gametest.log
+          ./gradlew runGameTestServer --no-daemon --console=plain 2>&1 | tee gametest.log
+
+      - name: Verify FTB Chunks purchase persistence across restart
+        run: bash scripts/run-ftb-restart-integration.sh
 
       - name: Prepare release files and notes
         shell: bash
@@ -113,6 +116,11 @@ jobs:
           path: |
             build/reports/tests/test/
             gametest.log
+            integration-seed.log
+            integration-verify.log
+            run-integration/purchase-state.properties
+            run-integration/logs/latest.log
+            run-integration/**/ftbchunks/**
             release-notes.md
           if-no-files-found: warn
           retention-days: 14
