@@ -1,0 +1,41 @@
+name: Generate GameTest template
+
+on:
+  push:
+    branches:
+      - maintenance/1.1.1-hardening
+    paths:
+      - .github/workflows/generate-gametest-template.yml
+
+permissions:
+  contents: write
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Check out branch
+        uses: actions/checkout@v6
+        with:
+          ref: maintenance/1.1.1-hardening
+
+      - name: Write minimal empty structure
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p src/main/resources/data/buyclaimchunks/structure
+          printf '%s' 'H4sIAAAAAAAC/z2LsQ6CQBBEhxwoBzH+j7W1pf1KxmQD3JHbrfh6EYOTTPHy8jogoL+Ly5PFNCfgahG16cqArwSq4xEtk6srrdsYEafXlIdxp82GJdsR/RfQmIsTv+K8yER37kmL+iEzcZk1cSjy9ptoAT5DmKKYlgAAAA==' | base64 --decode > src/main/resources/data/buyclaimchunks/structure/empty.nbt
+          printf '%s  %s\n' '7f3269df5bcb1c8d31181e7383fe72fefca8232769457c7888b5c99ad49d951f' 'src/main/resources/data/buyclaimchunks/structure/empty.nbt' | sha256sum --check
+
+      - name: Commit generated structure
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add src/main/resources/data/buyclaimchunks/structure/empty.nbt
+          git diff --cached --quiet && exit 0
+          git commit -m 'test: add empty GameTest structure'
+          git push origin HEAD:maintenance/1.1.1-hardening
