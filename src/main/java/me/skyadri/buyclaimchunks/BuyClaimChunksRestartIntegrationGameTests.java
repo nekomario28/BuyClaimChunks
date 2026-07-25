@@ -1,19 +1,30 @@
 package me.skyadri.buyclaimchunks;
 
+import com.mojang.authlib.GameProfile;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import dev.ftb.mods.ftbchunks.api.ChunkTeamData;
 import dev.ftb.mods.ftbchunks.api.FTBChunksAPI;
+import io.netty.channel.embedded.EmbeddedChannel;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.network.Connection;
+import net.minecraft.network.PacketSendListener;
+import net.minecraft.network.protocol.Packet;
+import net.minecraft.network.protocol.PacketFlow;
+import net.minecraft.network.protocol.common.ClientboundKeepAlivePacket;
+import net.minecraft.network.protocol.common.ServerboundKeepAlivePacket;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.network.CommonListenerCookie;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.GameType;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
-import net.neoforged.testframework.gametest.ExtendedGameTestHelper;
+import net.neoforged.neoforge.network.registration.NetworkRegistry;
+import net.neoforged.testframework.gametest.GameTestPlayer;
+import org.jetbrains.annotations.Nullable;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -41,12 +52,15 @@ public final class BuyClaimChunksRestartIntegrationGameTests {
             return;
         }
 
-        if (!(helper instanceof ExtendedGameTestHelper extendedHelper)) {
-            helper.fail("NeoForge ExtendedGameTestHelper is required for the restart integration test");
+        GameTestPlayer player;
+        try {
+            player = makeConnectedPlayer(helper, GameType.SURVIVAL);
+        } catch (Exception exception) {
+            BuyClaimChunks.LOGGER.error("Failed to create connected GameTest player", exception);
+            helper.fail("Failed to create connected GameTest player: " + exception.getMessage());
             return;
         }
 
-        var player = extendedHelper.makeTickingMockServerPlayerInLevel(GameType.SURVIVAL);
         helper.runAfterDelay(5, () -> {
             try {
                 var server = helper.getLevel().getServer();
@@ -101,6 +115,10 @@ public final class BuyClaimChunksRestartIntegrationGameTests {
                 );
 
                 writeState(player.getUUID(), 1, 4L, 0L);
+
+                // Keep the player connected until the GameTest server performs its
+                // normal shutdown. This deliberately exercises FTB Teams/Chunks'
+                // ordinary save lifecycle rather than invoking a test-only save.
                 helper.succeed();
             } catch (Exception exception) {
                 BuyClaimChunks.LOGGER.error("FTB Chunks purchase seed phase failed", exception);
@@ -144,6 +162,61 @@ public final class BuyClaimChunksRestartIntegrationGameTests {
             BuyClaimChunks.LOGGER.error("FTB Chunks restart verification phase failed", exception);
             helper.fail("FTB Chunks restart verification phase failed: " + exception.getMessage());
         }
+    }
+
+    /**
+     * Creates the same connected in-memory player used by NeoForge's test
+     * framework, but accepts the vanilla {@link GameTestHelper} supplied to
+     * annotation-based GameTests. The player is registered in PlayerList, so
+     * Brigadier player arguments and FTB Teams login hooks see a real online
+     * ServerPlayer.
+     */
+    private static GameTestPlayer makeConnectedPlayer(GameTestHelper helper, GameType gameType) {
+        CommonListenerCookie cookie = CommonListenerCookie.createInitial(
+                new GameProfile(UUID.randomUUID(), "buyclaim-restart-test"),
+                false
+        );
+        GameTestPlayer player = new GameTestPlayer(
+                helper.getLevel().getServer(),
+                helper.getLevel(),
+                cookie.gameProfile(),
+                cookie.clientInformation(),
+                helper
+        );
+
+        Connection connection = new Connection(PacketFlow.SERVERBOUND) {
+            @Override
+            public void tick() {
+                super.tick();
+                player.resetLastActionTime();
+            }
+
+            @Override
+            public boolean isMemoryConnection() {
+                return true;
+            }
+
+            @Override
+            public void send(Packet<?> packet, @Nullable PacketSendListener listener, boolean flush) {
+                super.send(packet, listener, flush);
+                if (packet instanceof ClientboundKeepAlivePacket keepAlivePacket) {
+                    player.connection.handleKeepAlive(new ServerboundKeepAlivePacket(keepAlivePacket.getId()));
+                }
+            }
+        };
+
+        new EmbeddedChannel(connection);
+        NetworkRegistry.configureMockConnection(connection);
+
+        var server = helper.getLevel().getServer();
+        server.getPlayerList().placeNewPlayer(connection, player, cookie);
+        server.getConnection().getConnections().add(connection);
+        player.gameMode.changeGameModeForPlayer(gameType);
+        player.setYRot(180.0F);
+        player.connection.chunkSender.sendNextChunks(player);
+        player.connection.chunkSender.onChunkBatchReceivedByClient(64.0F);
+        player.connection.markClientLoaded();
+        return player;
     }
 
     private static int executeAdminCommand(
