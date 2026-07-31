@@ -11,7 +11,6 @@ on:
 permissions:
   actions: read
   contents: read
-  issues: write
 
 concurrency:
   group: c2fr-encrypted-bridge-${{ github.event.pull_request.number }}
@@ -31,18 +30,15 @@ jobs:
       NEOFORGE_VERSION: 21.1.242
       MINECRAFT_VERSION: 1.21.1
       NEOFORGE_INSTALLER_SHA256: f11bef99d86dc424a93117ddf33507e5eaeb78173375741f70d2962e39a66787
-      PAYLOAD_BRANCH: ci/c2fr-encrypted-bridge-trigger
+      PAYLOAD_BRANCH: ci/c2fr-encrypted-payload
       EVIDENCE_DIR: bridge-evidence
 
     steps:
-      - name: Generate one-run encryption key and publish public half
+      - name: Generate one-run encryption key
         shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           set -euo pipefail
-          mkdir -p "$RUNNER_TEMP/c2fr-bridge" "$EVIDENCE_DIR"
+          mkdir -p "$RUNNER_TEMP/c2fr-bridge" "$EVIDENCE_DIR" public-key
           chmod 700 "$RUNNER_TEMP/c2fr-bridge"
           openssl genpkey -algorithm RSA \
             -pkeyopt rsa_keygen_bits:3072 \
@@ -50,13 +46,26 @@ jobs:
           openssl pkey -in "$RUNNER_TEMP/c2fr-bridge/private.pem" \
             -pubout -out "$RUNNER_TEMP/c2fr-bridge/public.pem"
           chmod 600 "$RUNNER_TEMP/c2fr-bridge/private.pem"
+          cp "$RUNNER_TEMP/c2fr-bridge/public.pem" public-key/public.pem
           PUB_B64="$(base64 -w0 "$RUNNER_TEMP/c2fr-bridge/public.pem")"
-          BODY="C2FR_BRIDGE_PUBLIC_KEY_V1 run_id=$GITHUB_RUN_ID public_key_base64=$PUB_B64"
-          gh api --method POST \
-            "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments" \
-            -f body="$BODY" >/dev/null
-          printf 'key_algorithm=RSA-3072-OAEP-SHA256\nrun_id=%s\n' "$GITHUB_RUN_ID" \
-            > "$EVIDENCE_DIR/key-exchange.txt"
+          printf 'C2FR_BRIDGE_PUBLIC_KEY_V2 run_id=%s public_key_base64=%s\n' \
+            "$GITHUB_RUN_ID" "$PUB_B64"
+          printf 'key_algorithm=RSA-3072-OAEP-SHA256\nrun_id=%s\npayload_branch=%s\n' \
+            "$GITHUB_RUN_ID" "$PAYLOAD_BRANCH" > "$EVIDENCE_DIR/key-exchange.txt"
+
+      - name: Upload one-run public key
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: c2fr-bridge-public-key-${{ github.run_id }}
+          path: public-key/public.pem
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Set up Java 21
+        uses: actions/setup-java@2dfa201f20a6f349ae5acb4b1975b2f4d4041c7a
+        with:
+          distribution: temurin
+          java-version: '21'
 
       - name: Wait for encrypted exact JAR payload
         shell: bash
@@ -64,28 +73,34 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          fetch_content() {
+          fetch_double_base64() {
             local path="$1" output="$2" encoded
             encoded="$(gh api \
               "repos/$GITHUB_REPOSITORY/contents/$path?ref=$PAYLOAD_BRANCH" \
               --jq '.content' 2>/dev/null || true)"
             [[ -n "$encoded" ]] || return 1
-            printf '%s' "$encoded" | tr -d '\n' | base64 -d > "$output"
+            printf '%s' "$encoded" | tr -d '\n' | base64 -d \
+              | tr -d '\n' | base64 -d > "$output"
             [[ -s "$output" ]]
           }
 
+          PREFIX="bridge/$GITHUB_RUN_ID"
           READY=0
           for _ in $(seq 1 120); do
-            if fetch_content bridge/c2fr-payload.enc "$RUNNER_TEMP/c2fr-bridge/payload.enc" && \
-               fetch_content bridge/c2fr-key.enc "$RUNNER_TEMP/c2fr-bridge/key.enc"; then
+            if fetch_double_base64 "$PREFIX/c2fr-payload.enc.b64" \
+                 "$RUNNER_TEMP/c2fr-bridge/payload.enc" && \
+               fetch_double_base64 "$PREFIX/c2fr-key.enc.b64" \
+                 "$RUNNER_TEMP/c2fr-bridge/key.enc"; then
               READY=1
               break
             fi
-            rm -f "$RUNNER_TEMP/c2fr-bridge/payload.enc" "$RUNNER_TEMP/c2fr-bridge/key.enc"
+            rm -f "$RUNNER_TEMP/c2fr-bridge/payload.enc" \
+              "$RUNNER_TEMP/c2fr-bridge/key.enc"
             sleep 5
           done
           [[ "$READY" -eq 1 ]]
-          printf 'encrypted_payload_received=PASS\n' >> "$EVIDENCE_DIR/key-exchange.txt"
+          printf 'encrypted_payload_received=PASS\npayload_prefix=%s\n' "$PREFIX" \
+            >> "$EVIDENCE_DIR/key-exchange.txt"
 
       - name: Decrypt and verify immutable production JAR
         shell: bash
@@ -103,7 +118,8 @@ jobs:
             -pass file:"$RUNNER_TEMP/c2fr-bridge/passphrase.bin"
           ACTUAL_SHA="$(sha256sum "$RUNNER_TEMP/c2fr-bridge/production.jar" | awk '{print $1}')"
           [[ "$ACTUAL_SHA" == "$EXPECTED_JAR_SHA256" ]]
-          jar tf "$RUNNER_TEMP/c2fr-bridge/production.jar" > "$EVIDENCE_DIR/production-jar-contents.txt"
+          jar tf "$RUNNER_TEMP/c2fr-bridge/production.jar" \
+            > "$EVIDENCE_DIR/production-jar-contents.txt"
           grep -Fq 'com/nekomario28/civitasresidents/CivitasResidents.class' \
             "$EVIDENCE_DIR/production-jar-contents.txt"
           grep -Fq 'ResidentsIdentityProviderRegistration.class' \
@@ -202,6 +218,8 @@ jobs:
             sleep 5
             kill -KILL "$PID" 2>/dev/null || true
             wait "$PID" || true
+            printf 'server_startup=FAIL\nserver_wait_seconds=%s\n' "$ELAPSED" \
+              > "$EVIDENCE_DIR/server.txt"
             exit 1
           fi
           grep -Fq 'Civitas Residents canonical runtime initialized' \
@@ -250,7 +268,7 @@ jobs:
         if: always()
         shell: bash
         run: |
-          rm -rf "$RUNNER_TEMP/c2fr-bridge" "$RUNNER_TEMP/c2fr-server"
+          rm -rf "$RUNNER_TEMP/c2fr-bridge" "$RUNNER_TEMP/c2fr-server" public-key
 
       - name: Upload text-only supplemental evidence
         if: always()
