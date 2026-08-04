@@ -42,6 +42,10 @@ required_entries=(
   me/skyadri/buyclaimchunks/ClaimCapacityBackend.class
   me/skyadri/buyclaimchunks/ClaimCapacityUpdate.class
   me/skyadri/buyclaimchunks/ClaimCapacityBackends.class
+  me/skyadri/buyclaimchunks/PricingCalculator.class
+  me/skyadri/buyclaimchunks/PurchaseLedger.class
+  me/skyadri/buyclaimchunks/PurchaseLedger\$Account.class
+  me/skyadri/buyclaimchunks/RepricedPurchase.class
   me/skyadri/buyclaimchunks/UnavailableClaimCapacityBackend.class
   me/skyadri/buyclaimchunks/FtbClaimCapacityBackend.class
   me/skyadri/buyclaimchunks/OpenPacClaimCapacityBackend.class
