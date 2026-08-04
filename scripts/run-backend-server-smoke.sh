@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-backend=${1:?Usage: run-backend-server-smoke.sh <ftb|openpac>}
-if [[ "$backend" != "ftb" && "$backend" != "openpac" ]]; then
-  echo "Unsupported backend: $backend" >&2
+backend=${1:?Usage: run-backend-server-smoke.sh <ftb|openpac|none|both>}
+if [[ "$backend" != "ftb" && "$backend" != "openpac" && "$backend" != "none" && "$backend" != "both" ]]; then
+  echo "Unsupported test backend: $backend" >&2
   exit 1
 fi
 
@@ -17,7 +17,7 @@ temp_log="${temp_root}/buyclaimchunks-${backend}-server-smoke.log"
 rm -f "$final_log" "$temp_log"
 
 setsid ./gradlew runServer \
-  -Pclaim_backend="$backend" \
+  -Ptest_backend="$backend" \
   --no-daemon --console=plain >"$temp_log" 2>&1 &
 server_pid=$!
 
@@ -30,7 +30,25 @@ trap cleanup EXIT
 for _ in {1..150}; do
   if grep -Eq 'Done \([0-9.]+s\)!' "$temp_log"; then
     cp "$temp_log" "$final_log"
-    echo "$backend dedicated server reached Done."
+
+    case "$backend" in
+      ftb)
+        grep -Fq 'BuyClaimChunks Continued initialized with ftb backend' "$final_log"
+        ;;
+      openpac)
+        grep -Fq 'BuyClaimChunks Continued initialized with openpac backend' "$final_log"
+        ;;
+      none)
+        grep -Fq 'No supported claim backend is installed.' "$final_log"
+        grep -Fq 'BuyClaimChunks Continued initialized with unavailable backend' "$final_log"
+        ;;
+      both)
+        grep -Fq 'Both FTB Chunks and Open Parties and Claims are installed.' "$final_log"
+        grep -Fq 'BuyClaimChunks Continued initialized with unavailable backend' "$final_log"
+        ;;
+    esac
+
+    echo "Universal JAR $backend environment reached Done with the expected backend selection."
     exit 0
   fi
 
