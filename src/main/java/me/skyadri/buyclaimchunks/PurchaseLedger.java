@@ -130,26 +130,19 @@ public final class PurchaseLedger extends SavedData {
     }
 
     /**
-     * Commits a completed transaction only if the account still matches the
-     * quote that was used. Commands run on the server thread, but this check
-     * also protects future callers from stale ledger writes.
+     * Atomically replaces an account when it still equals the supplied expected
+     * snapshot. The same operation is used to restore the old snapshot if a
+     * later payment step unexpectedly fails.
      */
-    public boolean commit(
-            UUID playerId,
-            Account expected,
-            int resultingPaidClaims,
-            long resultingTotalSpent
-    ) {
+    public boolean compareAndSet(UUID playerId, Account expected, Account replacement) {
         MutableAccount mutable = accounts.get(playerId);
         if (mutable == null || !mutable.snapshot().equals(expected)) {
             return false;
         }
-        if (resultingPaidClaims < expected.paidClaims || resultingTotalSpent < expected.totalSpent) {
-            throw new IllegalArgumentException("Purchase ledger values cannot move backwards");
-        }
 
-        mutable.paidClaims = resultingPaidClaims;
-        mutable.totalSpent = resultingTotalSpent;
+        mutable.currencyItemId = replacement.currencyItemId;
+        mutable.paidClaims = replacement.paidClaims;
+        mutable.totalSpent = replacement.totalSpent;
         setDirty();
         return true;
     }
