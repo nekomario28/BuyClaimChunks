@@ -8,11 +8,18 @@
 - Kept the existing mod ID, command, configuration keys, default price curve, limits, messages, and inventory behavior for both backends.
 - Extracted command handling, pricing, inventory payment, limit checks, logging, and transaction ordering into a shared purchase core.
 - Added compare-before-write checks so concurrent administrator changes are never overwritten by a stale purchase.
-- Added verified rollback when an already validated payment unexpectedly cannot be consumed after a capacity grant.
-- Stored OpenPAC purchases in `BONUS_CHUNK_CLAIMS`; no separate purchase database is introduced.
+- Added verified rollback for backend capacity and the purchase ledger when an already validated payment unexpectedly cannot be consumed.
+- Stored OpenPAC purchases in `BONUS_CHUNK_CLAIMS`; FTB Chunks or OpenPAC remains the source of truth for current capacity.
+- Added a server-side purchase ledger that records currency ID, paid capacity, and lifetime consumed items per player UUID.
+- Added retroactive numeric-curve reconciliation without claim confiscation:
+  - price increases carry the unpaid cumulative difference into the next purchase;
+  - price decreases grant compensation capacity supported by previous payments;
+  - credit that cannot fit under `maxExtraClaims` continues to reduce later prices.
+- Treats a change to `itemRequired` as a new baseline because different currencies have no automatic exchange rate.
+- Added a compatibility baseline for pre-ledger worlds so existing backend capacity keeps its current next-price position and exact tracking begins from the upgrade point.
 - Added diagnostics for non-zero OpenPAC base claim capacity and non-writable bonus settings without mutating OpenPAC configuration.
-- Added one-JAR inspection, FTB and OpenPAC GameTests, two-process restart persistence tests, dedicated-server smoke tests, and both/neither-backend startup guards.
-- Added English and Japanese default-configuration, price-curve, setting-change, OpenPAC setup, migration, and Modrinth publication documentation.
+- Added one-JAR inspection, FTB and OpenPAC GameTests, two-process backend and purchase-ledger restart persistence tests, dedicated-server smoke tests, and both/neither-backend startup guards.
+- Added English and Japanese default-configuration, price-curve, repricing-ledger, setting-change, OpenPAC setup, migration, and Modrinth publication documentation.
 - Added third-party license notices while keeping FTB Chunks and OpenPAC external and unbundled.
 
 ### Default economy
@@ -32,6 +39,22 @@ edit the file, save it, and restart to change the economy. Older configs may
 retain `amountRequired = 1`; change it to `4` or regenerate the file while the
 server is stopped to use the current default curve.
 
+### Price-curve changes
+
+For the same currency item, future purchases are priced from the player's
+lifetime consumed amount:
+
+```text
+next payment
+= cumulative cost through the paid claims after this purchase under the active curve
+- lifetime consumed amount
+```
+
+Existing claims are never removed after a price increase. A price decrease can
+grant compensation claims on the next successful purchase. Changing the
+currency item starts a new baseline instead of attempting an implicit exchange
+rate.
+
 ### OpenPAC server model
 
 For an all-paid claim model, configure the effective OpenPAC base claim limit,
@@ -44,6 +67,7 @@ Purchased capacity is stored in the player's effective
 - Existing FTB Chunks users keep their FTB personal extra-claim quota and existing BuyClaimChunks configuration.
 - Replace an older BuyClaimChunks Continued JAR with the single universal 1.2.0 JAR.
 - Install exactly one backend: FTB Chunks or OpenPAC.
+- On first use after upgrading from a version without the purchase ledger, current backend capacity is treated as already paid at the active curve.
 - Automatic FTB-to-OpenPAC quota migration is not provided, to avoid duplicating capacity while both data sets remain in backups.
 
 ## 1.1.1 - 2026-07-26
