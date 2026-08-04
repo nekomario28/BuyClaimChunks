@@ -8,6 +8,26 @@
 - Safely disables `/buyclaim` when both or neither backend is installed.
 - Preserves the same `/buyclaim [amount]` command, configuration file, price curve, limits, and payment behavior for both backends.
 
+## Price changes without claim confiscation
+
+- Added a server-side purchase ledger keyed by player UUID.
+- Records the configured currency ID, capacity bought through this mod, and the lifetime amount actually consumed.
+- Numeric price increases never remove existing claims. The unpaid cumulative difference is added to the next purchase.
+- Numeric price decreases grant compensation capacity supported by previous payments during the next successful purchase.
+- Credit that cannot fit under `maxExtraClaims` continues to reduce later purchase prices.
+- Changing `itemRequired` starts a new baseline instead of guessing an exchange rate between different items.
+- Worlds upgraded from a pre-ledger release preserve their current next-price position and begin exact tracking from that point.
+
+The active calculation is:
+
+```text
+next payment
+= cumulative cost through the paid claims after this purchase under the current curve
+- lifetime consumed amount
+```
+
+FTB Chunks or OpenPAC remains the source of truth for current claim capacity. The new ledger records only purchase history needed for safe repricing.
+
 ## OpenPAC support
 
 - Stores purchased capacity in OpenPAC `BONUS_CHUNK_CLAIMS`.
@@ -16,9 +36,9 @@
 
 ## Safety
 
-- Detects concurrent quota changes before writing.
-- Verifies the backend value before consuming payment.
-- Attempts a verified rollback if an already validated payment unexpectedly cannot be consumed.
+- Detects concurrent quota and ledger changes before committing.
+- Verifies backend capacity and compares the ledger snapshot before consuming payment.
+- Attempts a verified rollback of both capacity and ledger state if an already validated payment unexpectedly cannot be consumed.
 - Produces one JAR containing thin API adapters only; FTB Chunks and OpenPAC are not bundled.
 
 ## Default configuration
