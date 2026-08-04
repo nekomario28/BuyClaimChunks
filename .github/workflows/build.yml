@@ -18,7 +18,7 @@ jobs:
   validate:
     name: Universal JAR validation
     runs-on: buyclaimchunks
-    timeout-minutes: 150
+    timeout-minutes: 180
 
     steps:
       - name: Check out repository
@@ -75,8 +75,24 @@ jobs:
       - name: Smoke test OpenPAC selection
         run: bash scripts/run-backend-server-smoke.sh openpac
 
+      - name: Prove no-backend purchase fails without payment
+        shell: bash
+        run: |
+          set -o pipefail
+          ./gradlew runGameTestServer \
+            -Ptest_backend=none \
+            --no-daemon --console=plain 2>&1 | tee gametest-none.log
+
       - name: Verify no-backend fail-closed startup
         run: bash scripts/run-backend-server-smoke.sh none
+
+      - name: Prove dual-backend purchase fails without payment
+        shell: bash
+        run: |
+          set -o pipefail
+          ./gradlew runGameTestServer \
+            -Ptest_backend=both \
+            --no-daemon --console=plain 2>&1 | tee gametest-both.log
 
       - name: Verify dual-backend fail-closed startup
         run: bash scripts/run-backend-server-smoke.sh both
@@ -92,6 +108,8 @@ jobs:
             build-universal.log
             gametest-ftb.log
             gametest-openpac.log
+            gametest-none.log
+            gametest-both.log
             integration-seed.log
             integration-verify.log
             openpac-integration-seed.log
@@ -114,6 +132,8 @@ jobs:
             build-universal.log
             gametest-ftb.log
             gametest-openpac.log
+            gametest-none.log
+            gametest-both.log
             integration-seed.log
             integration-verify.log
             openpac-integration-seed.log
