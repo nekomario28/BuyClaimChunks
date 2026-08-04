@@ -72,12 +72,7 @@ public class BuyClaimCommand {
         int maxClaims = Config.getMaxExtraClaims();
         long minimumResultingClaims = (long) currentClaims + amount;
         if (minimumResultingClaims > maxClaims || minimumResultingClaims > Integer.MAX_VALUE) {
-            player.sendSystemMessage(
-                    Component.literal("You cannot buy that many extra claim chunks! Maximum of ")
-                            .append(Component.literal(String.valueOf(maxClaims)).withStyle(ChatFormatting.LIGHT_PURPLE))
-                            .append(Component.literal(" reached!"))
-                            .withStyle(ChatFormatting.RED)
-            );
+            sendMaximumReached(player, maxClaims);
             return 0;
         }
 
@@ -122,8 +117,22 @@ public class BuyClaimCommand {
             return 0;
         }
 
-        int remainingCapacity = maxClaims - currentClaims;
-        int maximumCompensationClaims = Math.max(0, remainingCapacity - amount);
+        if ((long) account.paidClaims() + amount > maxClaims) {
+            sendMaximumReached(player, maxClaims);
+            return 0;
+        }
+
+        int remainingBackendCapacity = maxClaims - currentClaims - amount;
+        int remainingPaidCapacity = maxClaims - account.paidClaims() - amount;
+        int remainingCommandCapacity = maxPurchaseAmount - amount;
+        int maximumCompensationClaims = Math.max(
+                0,
+                Math.min(
+                        Math.min(remainingBackendCapacity, remainingPaidCapacity),
+                        remainingCommandCapacity
+                )
+        );
+
         RepricedPurchase quote = PricingCalculator.quoteRepricedPurchase(
                 account.paidClaims(),
                 account.totalSpent(),
@@ -269,5 +278,14 @@ public class BuyClaimCommand {
                         .withStyle(ChatFormatting.GREEN)
         );
         return 1;
+    }
+
+    private static void sendMaximumReached(ServerPlayer player, int maxClaims) {
+        player.sendSystemMessage(
+                Component.literal("You cannot buy that many extra claim chunks! Maximum of ")
+                        .append(Component.literal(String.valueOf(maxClaims)).withStyle(ChatFormatting.LIGHT_PURPLE))
+                        .append(Component.literal(" reached!"))
+                        .withStyle(ChatFormatting.RED)
+        );
     }
 }
