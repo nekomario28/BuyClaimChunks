@@ -77,7 +77,8 @@ final class OpenPacClaimCapacityBackend implements ClaimCapacityBackend {
                     PlayerConfigOptions.BONUS_CHUNK_CLAIMS,
                     newValue
             );
-            if (result != IPlayerConfigAPI.SetResult.SUCCESS) {
+            if (result != IPlayerConfigAPI.SetResult.SUCCESS
+                    && result != IPlayerConfigAPI.SetResult.DEFAULTED) {
                 return ClaimCapacityUpdate.rejected(
                         observedBefore,
                         "OpenPAC rejected the bonus claim update: " + result
