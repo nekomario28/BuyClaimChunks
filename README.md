@@ -5,143 +5,89 @@
 <h1 align="center">💎 BuyClaimChunks Continued</h1>
 
 <p align="center">
-  <strong>Buy personal FTB Chunks extra-claim capacity with a configurable item currency.</strong>
-</p>
-
-<p align="center">
-  <a href="https://github.com/nekomario28/BuyClaimChunks/actions/workflows/build.yml"><img alt="Build" src="https://img.shields.io/github/actions/workflow/status/nekomario28/BuyClaimChunks/build.yml?branch=main&style=flat-square&label=build"></a>
-  <img alt="Minecraft 1.21.1" src="https://img.shields.io/badge/Minecraft-1.21.1-62B47A?style=flat-square">
-  <img alt="NeoForge 21.1" src="https://img.shields.io/badge/NeoForge-21.1-EF7E25?style=flat-square">
-  <img alt="Java 21" src="https://img.shields.io/badge/Java-21-ED8B00?style=flat-square&logo=openjdk&logoColor=white">
-  <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/License-MIT-blue?style=flat-square"></a>
-</p>
-
-<p align="center">
-  <img alt="Server required" src="https://img.shields.io/badge/Server-required-C83A3A?style=flat-square">
-  <img alt="Client optional" src="https://img.shields.io/badge/Client-optional-6A7FDB?style=flat-square">
+  <strong>Buy personal claim capacity with a configurable item currency.</strong>
 </p>
 
 <p align="center">
   <a href="README_ja.md">日本語</a> ·
   <a href="https://modrinth.com/mod/buyclaimchunks-continued">Modrinth</a> ·
   <a href="https://github.com/nekomario28/BuyClaimChunks/releases">Releases</a> ·
-  <a href="https://github.com/nekomario28/BuyClaimChunks/issues">Issues</a> ·
-  <a href="LICENSE">License</a>
+  <a href="LICENSE">MIT License</a>
 </p>
 
----
+BuyClaimChunks Continued is a server-side economy addon for Minecraft 1.21.1 / NeoForge. Players use `/buyclaim` to spend a configured vanilla or modded item and increase their personal claim capacity.
 
-BuyClaimChunks Continued is a small server-side economy addon for [FTB Chunks](https://www.curseforge.com/minecraft/mc-mods/ftb-chunks-forge). Players spend a configurable vanilla or modded item to increase their **personal extra-claim allowance** through `/buyclaim`.
+Version 1.2.0 uses **one universal JAR**. Install exactly one supported claim backend:
 
-It is an independently maintained continuation of [SkyAdri's BuyClaimChunks](https://github.com/SkyAdri-mc/BuyClaimChunks). The original project is MIT-licensed; this fork is not affiliated with or endorsed by the original author or FTB.
+- **FTB Chunks**, or
+- **Open Parties and Claims (OpenPAC)**.
 
-## 📌 At a glance
-
-| | |
-|---|---|
-| **Command** | `/buyclaim [amount]` |
-| **Environment** | Server required, client optional; singleplayer supported |
-| **Currency** | Any registered vanilla or modded item |
-| **Pricing** | Fixed or progressive |
-| **Configuration** | `config/buyclaimchunks-common.toml` |
-| **Data source** | FTB Chunks personal extra-claim value |
-
-> [!IMPORTANT]
-> This mod increases claim **capacity**. It does not automatically claim a map chunk, increase a party-wide allowance, or add force-loaded chunks.
-
-## ✨ Features
-
-- Buy one or multiple personal extra-claim slots with `/buyclaim [amount]`.
-- Use any registered item as currency, including modded coins and resources.
-- Configure a constant price or a progressive curve based on the current FTB Chunks personal extra-claim total.
-- Count matching items across the hotbar and normal 36-slot inventory.
-- Update FTB Chunks first and consume payment only after the quota increase succeeds.
-- Configure separate limits for one command and the resulting personal extra-claim total.
-- Reject invalid item IDs, overflowed totals, and unsafe transactions without consuming payment.
-- Reuse FTB Chunks as the source of truth instead of maintaining a second quota database.
-
-## 📦 Supported versions
-
-The `main` branch and this guide cover Minecraft 1.21.1.
-
-| Component | Supported / tested version |
-|---|---|
-| Minecraft | 1.21.1 |
-| NeoForge | 21.1; tested with 21.1.242 |
-| Java | 21 |
-| FTB Chunks | 2101.1.20 up to, but not including, 2102 |
-| FTB Teams | tested with 2101.1.9 |
-| FTB Library | tested with 2101.1.30 |
-| Architectury API | tested with 13.0.8 |
-
-A legacy Minecraft 1.20.1 / Forge 47.4 version remains on the [`forge-1.20.1`](https://github.com/nekomario28/BuyClaimChunks/tree/forge-1.20.1) branch. Its behavior and configuration may differ from this guide.
-
-## 🚀 Installation
-
-1. Install NeoForge for Minecraft 1.21.1.
-2. Install FTB Chunks and its required dependencies: FTB Library, FTB Teams, and Architectury API.
-3. Download the current JAR from [Modrinth](https://modrinth.com/mod/buyclaimchunks-continued) or [GitHub Releases](https://github.com/nekomario28/BuyClaimChunks/releases).
-4. Place the JAR in the server's `mods` directory.
-5. Start the server once to generate `config/buyclaimchunks-common.toml`.
-6. Stop the server before changing the generated configuration.
-7. Restart and test `/buyclaim` with a normal player account.
-
-For singleplayer, place the JAR in the normal instance `mods` directory because the integrated server runs the command logic.
+The same command, configuration, price curve, limits, inventory behavior, and transaction safety are used for both backends.
 
 > [!WARNING]
-> This fork preserves the original `buyclaimchunks` mod ID. Do not install it together with the original BuyClaimChunks JAR.
+> Install exactly one backend. If both FTB Chunks and OpenPAC are installed, or neither is installed, the server still starts but `/buyclaim` is disabled to prevent updating the wrong quota.
 
-## ⚡ Quick start
+## Features
 
-The default currency is `minecraft:diamond`, and the first extra-claim slot costs 4 diamonds.
+- `/buyclaim` purchases one personal extra-claim slot.
+- `/buyclaim <amount>` purchases multiple sequentially priced slots.
+- Any registered item can be used as currency.
+- Fixed or progressive pricing.
+- Separate total-cap and per-command limits.
+- Payment is counted across the hotbar and normal 36-slot inventory.
+- Armor and offhand slots are excluded.
+- Capacity is updated and verified before payment is consumed.
+- Concurrent administrator changes are detected instead of overwritten.
+- An unexpected payment failure triggers a verified capacity rollback.
+- The selected claim mod remains the source of truth; no second quota database is created.
+
+The mod increases **capacity only**. It does not automatically claim the current chunk, sell force-loaded chunks, charge upkeep, or refund unclaims.
+
+## Requirements
+
+| Component | Supported version |
+|---|---|
+| Minecraft | 1.21.1 |
+| NeoForge | 21.1.x |
+| Java | 21 |
+| BuyClaimChunks Continued | one universal 1.2.0 JAR |
+| FTB option | FTB Chunks 2101.1.20 or newer, below 2102, plus its dependencies |
+| OpenPAC option | Open Parties and Claims 0.27.6 or newer in the supported 1.21.1 line |
+
+Environment: server required, multiplayer clients optional. For singleplayer, install the mod in the instance because Minecraft runs an integrated server.
+
+## Installation
+
+1. Install Minecraft 1.21.1, NeoForge 21.1.x, and Java 21.
+2. Install **exactly one** claim backend:
+   - FTB Chunks and its required dependencies, or
+   - Open Parties and Claims.
+3. Place the single `buyclaimchunks-continued-neoforge-1.21.1-1.2.0.jar` in the `mods` directory.
+4. Start the server once.
+5. Stop the server before editing configuration.
+6. Configure the economy and, for OpenPAC, configure the zero-base claim model if every slot should be paid.
+7. Restart and test `/buyclaim` with a normal player account.
+
+The original BuyClaimChunks and this continuation use the same `buyclaimchunks` mod ID and cannot be installed together.
+
+## Commands
 
 ```text
 /buyclaim
+/buyclaim <amount>
 ```
 
-Buys one personal extra-claim slot.
+The command is player-only because the transaction charges the player's inventory.
 
-```text
-/buyclaim 5
-```
+## Default configuration
 
-Buys the next five slots in one transaction. Every slot is priced individually, then the prices are added together.
-
-The command is available to ordinary players. It cannot be run from the server console or a command block because payment requires a player inventory.
-
-## 🔍 What changes after a purchase
-
-A successful transaction increases the player's **personal extra-claim allowance stored by FTB Chunks**. The player still claims land through the normal FTB Chunks map or claim controls.
-
-Because FTB Chunks remains the source of truth:
-
-- Extra quota granted by an administrator affects the next purchase price.
-- `maxExtraClaims` limits the total personal extra-claim value, not only slots purchased through this mod.
-- Removing the mod does not leave a separate quota database to migrate.
-
-## 🛡️ Transaction safety
-
-Payment items are counted in the hotbar and normal inventory. Armor and offhand slots are not included.
-
-The transaction runs in this order:
-
-1. Read the current personal extra-claim total from FTB Chunks.
-2. Validate purchase limits and calculate the complete batch price.
-3. Validate the configured item and count the player's inventory.
-4. Execute the FTB Chunks quota increase synchronously.
-5. Consume payment only when FTB Chunks reports success.
-
-If the quota update fails, the purchase stops and no items are consumed.
-
-## ⚙️ Configuration
-
-Configuration file:
+The generated file is:
 
 ```text
 config/buyclaimchunks-common.toml
 ```
 
-Default values:
+Fresh installations use:
 
 ```toml
 [general]
@@ -153,32 +99,45 @@ maxExtraClaims = 100
 maxPurchaseAmount = 100
 ```
 
-| Option | Default | Allowed values | Meaning |
-|---|---:|---|---|
-| `itemRequired` | `minecraft:diamond` | Registered item ID | Payment item, including `modid:item_name`. |
-| `amountRequired` | `4` | 1 to 2,147,483,647 | Base and minimum price. |
-| `priceGrowthFactor` | `3.45` | 0 to 1,000,000 | Controls how quickly later slots become more expensive. `0` produces a constant price. |
-| `priceExponent` | `0.5` | 0 to 4 | Controls the curve shape. `0.5` is a square-root curve; `0` produces a constant price. |
-| `maxExtraClaims` | `100` | 1 to 2,147,483,647 | Maximum resulting FTB Chunks personal extra-claim total. |
-| `maxPurchaseAmount` | `100` | 1 to 10,000 | Maximum amount accepted by one command. |
+| Option | Default | Meaning |
+|---|---:|---|
+| `itemRequired` | `minecraft:diamond` | Registry ID of the payment item. Modded items use `modid:item_name`. |
+| `amountRequired` | `4` | Price of the first slot and minimum per-slot price. |
+| `priceGrowthFactor` | `3.45` | Strength of progressive price growth. Set to `0` for a fixed price. |
+| `priceExponent` | `0.5` | Shape of the curve. `0.5` is square-root growth; `0` also gives a fixed price. |
+| `maxExtraClaims` | `100` | Maximum backend-owned personal extra capacity. Administrator-granted extras count too. |
+| `maxPurchaseAmount` | `100` | Maximum amount accepted by one command. |
 
-Stop the server before editing the file. An unknown item ID is detected when a purchase is attempted, and no payment is taken.
+Existing configuration files are not overwritten. An older installation may still contain `amountRequired = 1`; change it manually or regenerate the file to use the current default curve.
+
+## How to change the settings
+
+1. Stop the Minecraft server completely.
+2. Back up `config/buyclaimchunks-common.toml`.
+3. Open that file in a text editor.
+4. Change only the values after `=` while keeping valid TOML syntax.
+5. Save the file.
+6. Start the server again.
+7. Test `/buyclaim` with a player who has the configured currency.
+8. Check `latest.log` if the change is rejected or the item ID is unknown.
+
+Do not edit another instance's config, and do not rely on live reload. Restart the server after changing these values.
 
 ### Currency examples
 
+Use emeralds with the default curve:
+
 ```toml
-# Emeralds
 itemRequired = "minecraft:emerald"
 ```
 
+Use a modded coin:
+
 ```toml
-# A modded currency
 itemRequired = "examplemod:coin"
 ```
 
-### Constant-price example
-
-Charge 8 emeralds for every slot:
+Charge a fixed 8 emeralds per slot:
 
 ```toml
 itemRequired = "minecraft:emerald"
@@ -187,150 +146,129 @@ priceGrowthFactor = 0.0
 priceExponent = 0.5
 ```
 
-Setting either `priceGrowthFactor` or `priceExponent` to `0` keeps the price at `amountRequired`.
+## Default cost curve
 
-## 📈 Progressive pricing
-
-The one-based personal extra-claim number `n` costs:
+For the one-based extra-capacity number `n`, the per-slot price is:
 
 ```text
 round(amountRequired + priceGrowthFactor * (n ^ priceExponent - 1))
 ```
 
-The result is never allowed below `amountRequired`.
+With the defaults:
 
-| Personal extra-claim number | Default item cost |
-|---:|---:|
-| 1 | 4 |
-| 2 | 5 |
-| 3 | 7 |
-| 5 | 8 |
-| 10 | 11 |
-| 50 | 25 |
-| 100 | 35 |
-
-Batch purchases sum each next slot in sequence:
-
-- From 0 extra claims, `/buyclaim 5` costs `4 + 5 + 7 + 7 + 8 = 31` diamonds.
-- From 8 extra claims, `/buyclaim 3` costs the prices of slots 9–11: `11 + 11 + 12 = 34` diamonds.
-
-## 🧩 Compatibility
-
-### Original BuyClaimChunks
-
-The original mod and this continuation cannot be loaded together because both use the `buyclaimchunks` mod ID. Remove the original JAR before installing this one.
-
-### Buying Chunks — FTB Chunks Addon
-
-A static inspection of [`snoopypupserr/buying_chunks_ftbchunks_addon`](https://github.com/snoopypupserr/buying_chunks_ftbchunks_addon) found no direct mod ID, root-command, or configuration-file conflict. The mods serve different purposes:
-
-- **BuyClaimChunks Continued** sells additional personal claim capacity.
-- **Buying Chunks** provides a chunk marketplace and can charge a Base Cost when land is claimed.
-
-They are expected to coexist when their shared FTB dependencies use compatible versions. However, enabling Buying Chunks' **Base Cost** means players may pay once for extra capacity and again when actually claiming land. Disable Base Cost when that two-stage economy is not intended.
-
-This is a source-level compatibility assessment, not a guarantee for every future release or modpack combination. Buying Chunks is required on both server and clients, so that requirement applies to a combined installation.
-
-## 🔄 Upgrading from the original mod or 1.0
-
-- Remove the original BuyClaimChunks JAR first.
-- Existing FTB Chunks personal extra-claim values remain the source of truth.
-- Existing `buyclaimchunks-common.toml` values are preserved.
-- Change an old `amountRequired = 1` value to `4` to use the current default curve.
-- Alternatively, stop the server, delete the config, and restart to generate current defaults.
-- Back up the world and configuration before changing production mods.
-
-## 🛠️ Troubleshooting
-
-<details>
-<summary><strong><code>/buyclaim</code> is unknown</strong></summary>
-
-Confirm that the NeoForge 1.21.1 JAR is in the server's `mods` directory, all FTB dependencies loaded successfully, and the log does not report a duplicate `buyclaimchunks` mod ID.
-</details>
-
-<details>
-<summary><strong>“This command can only be run by a player!”</strong></summary>
-
-Run the command in-game. Consoles and command blocks do not have a player inventory to charge.
-</details>
-
-<details>
-<summary><strong>The configured item does not exist</strong></summary>
-
-Check the spelling and namespace of `itemRequired`, and confirm that the mod registering the item is installed on the server.
-</details>
-
-<details>
-<summary><strong>The player owns the item but the mod reports a shortage</strong></summary>
-
-Move the item from armor or offhand slots into the hotbar or normal inventory.
-</details>
-
-<details>
-<summary><strong>The price is higher than expected</strong></summary>
-
-Check the player's current FTB Chunks personal extra-claim value. Administrator-granted quota is included in the price position.
-</details>
-
-<details>
-<summary><strong>“The claim purchase failed. No items were consumed.”</strong></summary>
-
-The internal FTB Chunks quota command did not report success. Check the supported FTB Chunks version and server log. Payment remains untouched by design.
-</details>
-
-<details>
-<summary><strong>Configuration changes are not applied</strong></summary>
-
-Stop the server, edit the server-side `config/buyclaimchunks-common.toml`, save it, and restart. Make sure you did not edit another instance's config.
-</details>
-
-## 🧪 Building from source
-
-Use Java 21. Run unit tests and build the release JAR:
-
-```shell
-./gradlew clean test build
+```text
+round(4 + 3.45 * (sqrt(n) - 1))
 ```
 
-Run the NeoForge GameTest server:
+| Slot number | Item cost | Cumulative cost through that slot |
+|---:|---:|---:|
+| 1 | 4 | 4 |
+| 2 | 5 | 9 |
+| 3 | 7 | 16 |
+| 5 | 8 | 31 |
+| 10 | 11 | 82 |
+| 20 | 16 | 223 |
+| 50 | 25 | 850 |
+| 100 | 35 | 2,369 |
 
-```shell
-./gradlew runGameTestServer
+Bulk purchases sum the next slots individually:
+
+- At 0 extra capacity, `/buyclaim 5` costs `4 + 5 + 7 + 7 + 8 = 31` items.
+- At 8 extra capacity, `/buyclaim 3` costs slots 9–11: `11 + 11 + 12 = 34` items.
+
+Pricing uses the capacity currently reported by the selected backend, including capacity granted by an administrator.
+
+## Backend behavior
+
+### FTB Chunks
+
+The purchase updates the player's personal FTB Chunks extra-claim value. It does not increase a party-wide FTB Teams quota. Players still claim land through the normal FTB Chunks controls.
+
+### Open Parties and Claims
+
+The purchase updates OpenPAC's per-player `BONUS_CHUNK_CLAIMS` value.
+
+For an all-paid model, set the effective free capacity to zero in the world's OpenPAC server configuration, normally:
+
+```text
+<world>/serverconfig/openpartiesandclaims-server.toml
 ```
 
-Verify the packaged JAR contents and metadata:
+Relevant values:
+
+```toml
+[serverConfig]
+permissionSystem = ""
+
+[serverConfig.claims]
+enabled = true
+partyOwnedClaims = false
+maxPlayerClaims = 0
+maxPlayerClaimsPermission = ""
+claimBonusPerPartyMember = 0
+claimBonusForPartyOwner = 0
+```
+
+Also ensure no external rank or permission system grants a non-zero claim limit. BuyClaimChunks Continued warns when the effective OpenPAC base limit is not zero, but it does not silently rewrite OpenPAC's configuration.
+
+See [`docs/openpac-setup.md`](docs/openpac-setup.md) for migration and troubleshooting details.
+
+## Transaction safety
+
+A purchase runs in this order:
+
+1. Read current backend capacity.
+2. Validate the amount, total cap, and overflow limits.
+3. Calculate every slot in the batch.
+4. Validate and count the payment item.
+5. Re-read capacity to detect concurrent changes.
+6. Update and verify backend capacity.
+7. Consume payment.
+8. If payment unexpectedly fails, attempt to restore the previous capacity.
+9. Send success only after both capacity and payment are confirmed.
+
+A rejected capacity update consumes no items.
+
+## Universal-JAR selection rules
+
+| Installed claim mods | Result |
+|---|---|
+| FTB Chunks only | FTB backend selected automatically |
+| OpenPAC only | OpenPAC backend selected automatically |
+| Neither | Server starts; purchases disabled |
+| Both | Server starts; purchases disabled to avoid ambiguity |
+
+The JAR contains only BuyClaimChunks Continued code and thin API adapters. It does not bundle either claim mod.
+
+## Building and validation
+
+Build the universal JAR:
 
 ```shell
+./gradlew clean test build -Ptest_backend=none
 bash scripts/verify-release-jar.sh
 ```
 
-The JAR is generated at:
-
-```text
-build/libs/buyclaimchunks-continued-neoforge-1.21.1-1.1.1.jar
-```
-
-Run a development dedicated server with:
+Validate with FTB Chunks:
 
 ```shell
-./gradlew runServer
+./gradlew runGameTestServer -Ptest_backend=ftb
+bash scripts/run-ftb-restart-integration.sh
 ```
 
-GitHub Actions runs unit tests, validates the packaged JAR, executes NeoForge GameTests, starts a clean dedicated server, and requires it to reach Minecraft's `Done` startup message. Tags matching the project version are also validated before a GitHub Release and SHA-256 checksum are published.
+Validate with OpenPAC:
 
-## 🐛 Reporting problems
+```shell
+./gradlew runGameTestServer -Ptest_backend=openpac
+bash scripts/run-openpac-restart-integration.sh
+```
 
-Open an [issue](https://github.com/nekomario28/BuyClaimChunks/issues) and include:
+The release JAR is generated under `build/libs/`.
 
-- Minecraft, NeoForge, FTB Chunks, and BuyClaimChunks Continued versions.
-- The relevant section of `latest.log` or the crash report.
-- The command and configuration values involved.
-- Whether the issue reproduces with a newly generated config.
+## License and attribution
 
-Do not include account tokens, control-panel passwords, or private server addresses.
+BuyClaimChunks Continued is MIT-licensed and is a maintained fork of the original MIT-licensed BuyClaimChunks by SkyAdri.
 
-## 📄 License and credits
+FTB Chunks and OpenPAC are separate external downloads and are not redistributed in this JAR. FTB Chunks is All Rights Reserved / visible source; OpenPAC is LGPL-3.0-only. See [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) and [`docs/license-review.md`](docs/license-review.md).
 
-BuyClaimChunks Continued is distributed under the [MIT License](LICENSE) and maintained by **nekomario28**.
-
-The original work is credited to SkyAdri. See [NOTICE](NOTICE) for attribution and fork details.
+This project is not affiliated with or endorsed by SkyAdri, Feed The Beast Ltd, Xaero, Mojang, NeoForge, Modrinth, or CurseForge.
