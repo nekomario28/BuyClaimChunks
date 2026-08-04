@@ -22,12 +22,16 @@ Do not install both claim mods. If both or neither are present, the server still
 - Any registered vanilla or modded item can be used as currency.
 - Fixed pricing or a configurable progressive cost curve.
 - Sequential per-slot pricing for bulk purchases.
+- Server-side lifetime payment ledger for later numeric price-curve changes.
+- Price increases never confiscate existing claims; the unpaid difference is carried into the next purchase.
+- Price decreases grant compensation capacity supported by previous payments.
 - Separate total-cap and per-command purchase limits.
 - Payment is counted across the hotbar and normal inventory.
-- Capacity is updated and verified before payment is consumed.
+- Backend capacity and the economic ledger are verified before payment is consumed.
 - Concurrent administrator changes are detected instead of overwritten.
-- Failed backend updates consume no items.
-- No separate purchase-count database.
+- Failed transactions consume no items and attempt to roll back both capacity and ledger state.
+
+FTB Chunks or OpenPAC remains the source of truth for current claim capacity. The BuyClaimChunks ledger stores only the currency ID, capacity bought through this mod, and the lifetime amount actually consumed.
 
 The mod buys claim **capacity**. It does not automatically claim the current chunk, sell force-loaded chunks, charge upkeep, or refund unclaims.
 
@@ -59,9 +63,23 @@ With the defaults, slot 1 costs 4 diamonds, slot 10 costs 11, slot 50 costs 25, 
 
 To change settings: stop the server, edit `config/buyclaimchunks-common.toml`, save it, restart, and test `/buyclaim`. Existing configs are preserved and are not overwritten with new defaults.
 
+## Changing prices later
+
+For the same currency item, a later numeric price change uses:
+
+```text
+next payment
+= cumulative cost through the paid claims after this purchase under the active curve
+- lifetime consumed amount
+```
+
+When prices rise, existing claims remain untouched and the shortfall is added to the next purchase. When prices fall, previous payments can grant compensation claims during the next successful purchase. Credit that cannot fit under `maxExtraClaims` continues to reduce later prices.
+
+Changing `itemRequired` starts a new baseline because different items do not have a universal exchange rate. Worlds upgraded from a pre-ledger version start exact tracking from their current backend capacity at the active curve.
+
 ## OpenPAC all-paid setup
 
-The OpenPAC backend stores purchases in `BONUS_CHUNK_CLAIMS`. To make every claim slot paid, set OpenPAC's effective base claim limit, party/member bonuses, owner bonus, and permission/rank override to zero. Full settings and migration instructions are in the GitHub documentation.
+The OpenPAC backend stores purchases in `BONUS_CHUNK_CLAIMS`. To make every claim slot paid, set OpenPAC's effective base claim limit, party/member bonuses, owner bonus, and permission/rank override to zero. Full settings, repricing details, and migration instructions are in the GitHub documentation.
 
 ## Requirements
 
@@ -110,12 +128,16 @@ BuyClaimChunks Continuedは、SkyAdri氏のBuyClaimChunksをMinecraft 1.21.1／N
 - 任意のバニラ・他MODアイテムを通貨にできます。
 - 固定価格または設定可能な段階価格にできます。
 - 一括購入では各枠の連続価格を合計します。
+- 後から数値の価格曲線を変更できる、サーバー側の累計支払い台帳を持ちます。
+- 値上げ時も既存claimを没収せず、不足額を次回購入へ繰り越します。
+- 値下げ時は、過去の支払いで買える差分を補償枠として付与します。
 - 追加枠総上限と1コマンド購入上限を別々に設定できます。
 - ホットバーを含む通常インベントリから支払いを合算します。
-- backendの枠更新を確認してからアイテムを消費します。
+- backend枠と経済台帳を確認してからアイテムを消費します。
 - 管理者による同時変更を古い値で上書きしません。
-- backend更新に失敗した場合、アイテムは消費されません。
-- 独自の購入回数DBは作りません。
+- 失敗した取引ではアイテムを消費せず、枠と台帳のrollbackを試みます。
+
+現在のclaim上限の正本はFTB ChunksまたはOpenPACです。BuyClaimChunksの台帳は、通貨ID、本MODで購入した枠数、実際に消費した累計数だけを保存します。
 
 購入するのはclaimの**所有可能枠**です。現在地の自動claim、強制ロード枠販売、維持費、unclaim返金は追加しません。
 
@@ -147,9 +169,23 @@ round(amountRequired + priceGrowthFactor * (n ^ priceExponent - 1))
 
 設定変更は、サーバー停止後に`config/buyclaimchunks-common.toml`を編集・保存し、再起動して`/buyclaim`を確認します。既存設定は新しい既定値で上書きされません。
 
+## 後から価格を変更する場合
+
+同じ通貨アイテムの数値設定を変更した場合、次回価格は次で決まります。
+
+```text
+次回支払額
+= 新しい曲線で今回購入後の有料枠数までに必要な累計額
+- これまで実際に消費した累計額
+```
+
+値上げ時も既存claimは維持され、差額だけが次回購入へ加わります。値下げ時は、過去の支払いで買える補償枠を次の購入成功時に追加します。`maxExtraClaims`で一度に付与できないcreditは、後続価格を安くする形で残ります。
+
+`itemRequired`を変更した場合は、異なる通貨間に共通の交換比率がないため新しい基準を作ります。台帳導入前のワールドは、現在のbackend枠をその時点の曲線で購入済みだったものとして正確な追跡を開始します。
+
 ## OpenPACを全枠有料にする
 
-OpenPAC版では購入分を`BONUS_CHUNK_CLAIMS`へ保存します。全枠を購入制にする場合、OpenPACの有効base上限、party/member bonus、owner bonus、permission/rank overrideを0にしてください。詳細設定と移行手順はGitHubの日本語ガイドにあります。
+OpenPAC版では購入分を`BONUS_CHUNK_CLAIMS`へ保存します。全枠を購入制にする場合、OpenPACの有効base上限、party/member bonus、owner bonus、permission/rank overrideを0にしてください。詳細設定、再価格計算、移行手順はGitHubの日本語ガイドにあります。
 
 ## 必要環境
 
