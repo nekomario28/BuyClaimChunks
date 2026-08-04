@@ -20,7 +20,10 @@ public class BuyClaimCommand {
                 Commands.literal("buyclaim")
                         .then(
                                 Commands.argument("amount", IntegerArgumentType.integer(1))
-                                        .executes(context -> executeBuy(context.getSource(), IntegerArgumentType.getInteger(context, "amount")))
+                                        .executes(context -> executeBuy(
+                                                context.getSource(),
+                                                IntegerArgumentType.getInteger(context, "amount")
+                                        ))
                         )
                         .executes(context -> executeBuy(context.getSource(), 1))
         );
@@ -28,7 +31,6 @@ public class BuyClaimCommand {
 
     private static int executeBuy(CommandSourceStack source, int amount) {
         ServerPlayer player;
-
         try {
             player = source.getPlayerOrException();
         } catch (CommandSyntaxException exception) {
@@ -49,29 +51,100 @@ public class BuyClaimCommand {
             return 0;
         }
 
-        int maxClaims = Config.getMaxExtraClaims();
-        int currentClaims = ClaimHelper.getExtraClaims(player);
-
-        if ((long) currentClaims + amount > maxClaims) {
+        ClaimCapacityBackend backend = BuyClaimChunks.getClaimBackend();
+        int currentClaims;
+        try {
+            currentClaims = backend.getExtraClaims(player);
+        } catch (RuntimeException exception) {
+            BuyClaimChunks.LOGGER.error(
+                    "Failed to read {} claim capacity for player {}",
+                    backend.id(),
+                    player.getGameProfile().getName(),
+                    exception
+            );
             player.sendSystemMessage(
-                    Component.literal("You cannot buy that many extra claim chunks! Maximum of ")
-                            .append(Component.literal(String.valueOf(maxClaims)).withStyle(ChatFormatting.LIGHT_PURPLE))
-                            .append(Component.literal(" reached!"))
+                    Component.literal("The claim capacity backend is unavailable. No items were consumed.")
                             .withStyle(ChatFormatting.RED)
             );
             return 0;
         }
 
+        int maxClaims = Config.getMaxExtraClaims();
+        long minimumResultingClaims = (long) currentClaims + amount;
+        if (minimumResultingClaims > maxClaims || minimumResultingClaims > Integer.MAX_VALUE) {
+            sendMaximumReached(player, maxClaims);
+            return 0;
+        }
+
         ResourceLocation itemId = Config.getItemRequired();
-        long totalRequired = PricingCalculator.totalPrice(
-                currentClaims,
-                amount,
-                Config.getAmountRequired(),
-                Config.getPriceGrowthFactor(),
-                Config.getPriceExponent()
+        Item requiredItem = itemId == null
+                ? null
+                : BuiltInRegistries.ITEM.getOptional(itemId).orElse(null);
+        if (requiredItem == null) {
+            player.sendSystemMessage(
+                    Component.literal("The configured item for buying claim chunks does not exist!")
+                            .withStyle(ChatFormatting.RED)
+            );
+            return 0;
+        }
+
+        long basePrice = Config.getAmountRequired();
+        double growthFactor = Config.getPriceGrowthFactor();
+        double exponent = Config.getPriceExponent();
+
+        PurchaseLedger ledger;
+        PurchaseLedger.Account account;
+        try {
+            ledger = PurchaseLedger.get(player);
+            account = ledger.getOrCreateAccount(
+                    player.getUUID(),
+                    itemId.toString(),
+                    currentClaims,
+                    basePrice,
+                    growthFactor,
+                    exponent
+            );
+        } catch (RuntimeException exception) {
+            BuyClaimChunks.LOGGER.error(
+                    "Failed to read or initialize the purchase ledger for player {}",
+                    player.getGameProfile().getName(),
+                    exception
+            );
+            player.sendSystemMessage(
+                    Component.literal("The claim purchase ledger is unavailable. No items were consumed.")
+                            .withStyle(ChatFormatting.RED)
+            );
+            return 0;
+        }
+
+        if ((long) account.paidClaims() + amount > maxClaims) {
+            sendMaximumReached(player, maxClaims);
+            return 0;
+        }
+
+        int remainingBackendCapacity = maxClaims - currentClaims - amount;
+        int remainingPaidCapacity = maxClaims - account.paidClaims() - amount;
+        int remainingCommandCapacity = maxPurchaseAmount - amount;
+        int maximumCompensationClaims = Math.max(
+                0,
+                Math.min(
+                        Math.min(remainingBackendCapacity, remainingPaidCapacity),
+                        remainingCommandCapacity
+                )
         );
 
-        if (totalRequired == Long.MAX_VALUE) {
+        RepricedPurchase quote = PricingCalculator.quoteRepricedPurchase(
+                account.paidClaims(),
+                account.totalSpent(),
+                amount,
+                maximumCompensationClaims,
+                maxClaims,
+                basePrice,
+                growthFactor,
+                exponent
+        );
+
+        if (quote.overflow()) {
             player.sendSystemMessage(
                     Component.literal("The calculated purchase cost is too large. Check the server configuration.")
                             .withStyle(ChatFormatting.RED)
@@ -79,16 +152,18 @@ public class BuyClaimCommand {
             return 0;
         }
 
-        Item requiredItem = itemId == null
-                ? null
-                : BuiltInRegistries.ITEM.getOptional(itemId).orElse(null);
-        if (requiredItem == null) {
+        final int targetClaims;
+        try {
+            targetClaims = Math.addExact(currentClaims, quote.backendIncrease());
+        } catch (ArithmeticException exception) {
             player.sendSystemMessage(
-                    Component.literal("The configured item for buying claim chunks does not exist!").withStyle(ChatFormatting.RED)
+                    Component.literal("The resulting claim capacity is too large.")
+                            .withStyle(ChatFormatting.RED)
             );
             return 0;
         }
 
+        long totalRequired = quote.paymentRequired();
         long playerAmount = InventoryPayment.count(player.getInventory(), requiredItem);
         if (playerAmount < totalRequired) {
             String itemDisplay = requiredItem.getName(new ItemStack(requiredItem)).getString();
@@ -102,56 +177,115 @@ public class BuyClaimCommand {
                             .append(Component.literal(" to buy " + amount + " " + chunkText + "!"))
                             .withStyle(ChatFormatting.RED)
             );
+            if (quote.carriedDebt() > 0L) {
+                player.sendSystemMessage(
+                        Component.literal("This price includes ")
+                                .append(Component.literal(String.valueOf(quote.carriedDebt()))
+                                        .withStyle(ChatFormatting.LIGHT_PURPLE))
+                                .append(Component.literal(" carried forward after the server price curve increased."))
+                                .withStyle(ChatFormatting.RED)
+                );
+            }
             return 0;
         }
 
-        String ftbCmd = "ftbchunks admin extra_claim_chunks "
-                + player.getName().getString()
-                + " add " + amount;
-
-        var server = source.getServer();
-        int commandResult;
-        try {
-            commandResult = server.getCommands().getDispatcher().execute(
-                    ftbCmd,
-                    server.createCommandSourceStack()
-                            .withPermission(4)
-                            .withSuppressedOutput()
-            );
-        } catch (CommandSyntaxException exception) {
+        ClaimCapacityUpdate update = backend.setExtraClaims(player, currentClaims, targetClaims);
+        if (!update.success()) {
+            if (update.status() == ClaimCapacityUpdate.Status.CONCURRENT_CHANGE) {
+                player.sendSystemMessage(
+                        Component.literal("Your claim capacity changed during the purchase. Try the command again.")
+                                .withStyle(ChatFormatting.RED)
+                );
+            } else {
+                player.sendSystemMessage(
+                        Component.literal("The claim purchase failed. No items were consumed.")
+                                .withStyle(ChatFormatting.RED)
+                );
+            }
             BuyClaimChunks.LOGGER.warn(
-                    "FTB Chunks rejected an extra-claim update for player {}",
+                    "{} capacity update rejected for player {}: status={}, observed={}, detail={}",
+                    backend.id(),
                     player.getGameProfile().getName(),
-                    exception
+                    update.status(),
+                    update.observedClaims(),
+                    update.detail()
             );
-            commandResult = 0;
+            return 0;
         }
 
-        if (commandResult <= 0) {
+        PurchaseLedger.Account replacement = new PurchaseLedger.Account(
+                account.currencyItemId(),
+                quote.resultingPaidClaims(),
+                quote.resultingTotalSpent()
+        );
+        if (!ledger.compareAndSet(player.getUUID(), account, replacement)) {
+            ClaimCapacityUpdate rollback = backend.setExtraClaims(player, targetClaims, currentClaims);
+            BuyClaimChunks.LOGGER.error(
+                    "{} increased claim capacity for player {}, but the purchase ledger changed before commit; rollback status={}, observed={}, detail={}",
+                    backend.id(),
+                    player.getGameProfile().getName(),
+                    rollback.status(),
+                    rollback.observedClaims(),
+                    rollback.detail()
+            );
             player.sendSystemMessage(
-                    Component.literal("The claim purchase failed. No items were consumed.")
+                    Component.literal(
+                                    rollback.success()
+                                            ? "Your purchase history changed during the transaction, so the capacity update was rolled back. No items were consumed."
+                                            : "Your purchase history changed and automatic capacity rollback failed. No items were consumed; contact a server administrator."
+                            )
                             .withStyle(ChatFormatting.RED)
             );
             return 0;
         }
 
         if (!InventoryPayment.consume(player.getInventory(), requiredItem, totalRequired)) {
+            ClaimCapacityUpdate backendRollback = backend.setExtraClaims(player, targetClaims, currentClaims);
+            boolean ledgerRollback = ledger.compareAndSet(player.getUUID(), replacement, account);
             BuyClaimChunks.LOGGER.error(
-                    "FTB Chunks increased claim capacity for player {}, but the validated payment could not be consumed",
-                    player.getGameProfile().getName()
+                    "{} increased claim capacity for player {}, but validated payment could not be consumed; backend rollback status={}, observed={}, detail={}; ledger rollback={}",
+                    backend.id(),
+                    player.getGameProfile().getName(),
+                    backendRollback.status(),
+                    backendRollback.observedClaims(),
+                    backendRollback.detail(),
+                    ledgerRollback
             );
             player.sendSystemMessage(
-                    Component.literal("Claim capacity was increased, but payment could not be completed. Contact a server administrator.")
+                    Component.literal(
+                                    backendRollback.success() && ledgerRollback
+                                            ? "Payment could not be completed, so the claim capacity and purchase ledger were rolled back."
+                                            : "Claim capacity or the purchase ledger changed, but payment and automatic rollback failed. Contact a server administrator."
+                            )
                             .withStyle(ChatFormatting.RED)
             );
             return 0;
         }
 
+        if (quote.compensationClaims() > 0) {
+            player.sendSystemMessage(
+                    Component.literal("The updated price curve granted ")
+                            .append(Component.literal(String.valueOf(quote.compensationClaims()))
+                                    .withStyle(ChatFormatting.LIGHT_PURPLE))
+                            .append(Component.literal(" additional claim chunk(s) from your previous payments."))
+                            .withStyle(ChatFormatting.GREEN)
+            );
+        }
         player.sendSystemMessage(
-                Component.literal("You have successfully bought " + amount + " extra claim chunk(s)!")
+                Component.literal("You have successfully bought " + amount + " extra claim chunk(s) for ")
+                        .append(Component.literal(String.valueOf(totalRequired)).withStyle(ChatFormatting.LIGHT_PURPLE))
+                        .append(Component.literal(" item(s)!"))
                         .withStyle(ChatFormatting.GREEN)
         );
-
         return 1;
+    }
+
+    private static void sendMaximumReached(ServerPlayer player, int maxClaims) {
+        player.sendSystemMessage(
+                Component.literal("You cannot buy that many extra claim chunks! Maximum of ")
+                        .append(Component.literal(String.valueOf(maxClaims)).withStyle(ChatFormatting.LIGHT_PURPLE))
+                        .append(Component.literal(" reached!"))
+                        .withStyle(ChatFormatting.RED)
+        );
     }
 }

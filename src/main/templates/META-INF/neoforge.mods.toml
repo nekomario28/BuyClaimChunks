@@ -28,7 +28,16 @@ side="BOTH"
 
 [[dependencies.${mod_id}]]
 modId="ftbchunks"
-type="required"
+type="optional"
+reason="Install exactly one claim backend: FTB Chunks or Open Parties and Claims."
 versionRange="[${ftb_chunks_version},2102)"
+ordering="AFTER"
+side="BOTH"
+
+[[dependencies.${mod_id}]]
+modId="openpartiesandclaims"
+type="optional"
+reason="Install exactly one claim backend: FTB Chunks or Open Parties and Claims."
+versionRange="[${openpac_min_version},0.30)"
 ordering="AFTER"
 side="BOTH"

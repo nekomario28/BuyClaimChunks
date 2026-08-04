@@ -4,6 +4,11 @@ plugins {
     id 'net.neoforged.moddev' version '2.0.142'
 }
 
+def testBackend = (findProperty('test_backend') ?: 'ftb').toString()
+if (!(testBackend in ['ftb', 'openpac', 'none', 'both'])) {
+    throw new GradleException("Unsupported test_backend '${testBackend}'. Expected ftb, openpac, none, or both.")
+}
+
 group = mod_group_id
 version = mod_version
 
@@ -22,9 +27,27 @@ repositories {
     maven {
         url = 'https://maven.architectury.dev/'
     }
+    exclusiveContent {
+        forRepository {
+            maven {
+                name = 'Modrinth'
+                url = 'https://api.modrinth.com/maven'
+            }
+        }
+        filter {
+            includeGroup 'maven.modrinth'
+        }
+    }
 }
 
-def integrationGameDirectory = file('run-integration')
+sourceSets {
+    main {
+        java.srcDir 'src/ftb/java'
+        java.srcDir 'src/openpac/java'
+    }
+}
+
+def integrationGameDirectory = file("run-integration-${testBackend}")
 def integrationStateFile = new File(integrationGameDirectory, 'purchase-state.properties')
 
 neoForge {
@@ -43,12 +66,14 @@ neoForge {
         gameTestServer {
             type = 'gameTestServer'
             systemProperty 'neoforge.enabledGameTestNamespaces', mod_id
+            systemProperty 'buyclaimchunks.expectedBackend', testBackend
         }
 
         integrationSeed {
             type = 'gameTestServer'
             gameDirectory = integrationGameDirectory
             systemProperty 'neoforge.enabledGameTestNamespaces', mod_id
+            systemProperty 'buyclaimchunks.expectedBackend', testBackend
             systemProperty 'buyclaimchunks.integrationPhase', 'seed'
             systemProperty 'buyclaimchunks.integrationStateFile', integrationStateFile.absolutePath
             disableIdeRun()
@@ -58,6 +83,7 @@ neoForge {
             type = 'gameTestServer'
             gameDirectory = integrationGameDirectory
             systemProperty 'neoforge.enabledGameTestNamespaces', mod_id
+            systemProperty 'buyclaimchunks.expectedBackend', testBackend
             systemProperty 'buyclaimchunks.integrationPhase', 'verify'
             systemProperty 'buyclaimchunks.integrationStateFile', integrationStateFile.absolutePath
             disableIdeRun()
@@ -77,10 +103,27 @@ neoForge {
 }
 
 dependencies {
-    implementation "dev.architectury:architectury-neoforge:${architectury_version}"
-    implementation "dev.ftb.mods:ftb-library-neoforge:${ftb_library_version}"
-    implementation "dev.ftb.mods:ftb-teams-neoforge:${ftb_teams_version}"
-    implementation "dev.ftb.mods:ftb-chunks-neoforge:${ftb_chunks_version}"
+    // Both APIs are compile-time-only. Their full mods are installed separately
+    // by users and are never embedded in the BuyClaimChunks Continued JAR.
+    compileOnly "dev.architectury:architectury-neoforge:${architectury_version}"
+    compileOnly "dev.ftb.mods:ftb-library-neoforge:${ftb_library_version}"
+    compileOnly "dev.ftb.mods:ftb-teams-neoforge:${ftb_teams_version}"
+    compileOnly "dev.ftb.mods:ftb-chunks-neoforge:${ftb_chunks_version}"
+    compileOnly "maven.modrinth:gF3BGWvG:${openpac_modrinth_version}"
+
+    // ModDevGradle 2.0.142 does not create a localRuntime configuration in this
+    // project. runtimeOnly supplies the selected full mods to development runs
+    // without embedding them in the output JAR. This project does not publish a
+    // Maven POM, and the packaged-JAR gate rejects copied backend namespaces.
+    if (testBackend == 'ftb' || testBackend == 'both') {
+        runtimeOnly "dev.architectury:architectury-neoforge:${architectury_version}"
+        runtimeOnly "dev.ftb.mods:ftb-library-neoforge:${ftb_library_version}"
+        runtimeOnly "dev.ftb.mods:ftb-teams-neoforge:${ftb_teams_version}"
+        runtimeOnly "dev.ftb.mods:ftb-chunks-neoforge:${ftb_chunks_version}"
+    }
+    if (testBackend == 'openpac' || testBackend == 'both') {
+        runtimeOnly "maven.modrinth:gF3BGWvG:${openpac_modrinth_version}"
+    }
 
     testImplementation platform('org.junit:junit-bom:5.14.2')
     testImplementation 'org.junit.jupiter:junit-jupiter'
@@ -89,17 +132,18 @@ dependencies {
 
 def generateModMetadata = tasks.register('generateModMetadata', ProcessResources) {
     def replaceProperties = [
-            minecraft_version      : minecraft_version,
-            minecraft_version_range: minecraft_version_range,
-            neo_version_range      : neo_version_range,
-            loader_version_range   : loader_version_range,
-            ftb_chunks_version     : ftb_chunks_version,
-            mod_id                 : mod_id,
-            mod_name               : mod_name,
-            mod_license            : mod_license,
-            mod_version            : mod_version,
-            mod_authors            : mod_authors,
-            mod_description        : mod_description
+            minecraft_version       : minecraft_version,
+            minecraft_version_range : minecraft_version_range,
+            neo_version_range       : neo_version_range,
+            loader_version_range    : loader_version_range,
+            ftb_chunks_version      : ftb_chunks_version,
+            openpac_min_version     : openpac_min_version,
+            mod_id                  : mod_id,
+            mod_name                : mod_name,
+            mod_license             : mod_license,
+            mod_version             : mod_version,
+            mod_authors             : mod_authors,
+            mod_description         : 'Buy personal claim capacity with one configurable item economy. Install exactly one supported backend: FTB Chunks or Open Parties and Claims.'
     ]
 
     inputs.properties replaceProperties
@@ -122,4 +166,14 @@ tasks.named('test', Test) {
 tasks.named('jar', Jar) {
     from('LICENSE')
     from('NOTICE')
+    from('THIRD_PARTY_NOTICES.md')
+    manifest {
+        attributes('BuyClaimChunks-Backends': 'ftbchunks,openpartiesandclaims')
+    }
+}
+
+tasks.register('printTestBackend') {
+    doLast {
+        println testBackend
+    }
 }

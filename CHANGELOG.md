@@ -1,9 +1,74 @@
 # Changelog
 
-## Unreleased
+## 1.2.0 - Unreleased
 
-- Added an end-to-end, two-process NeoForge GameTest that executes the real `/buyclaim` command, verifies FTB Chunks personal quota `0 -> 1`, verifies payment `4 -> 0`, shuts the server down normally, restarts from the same world, and confirms the personal quota reloads as `1`.
-- Added the restart-persistence check to pull-request CI and release validation.
+- Added Open Parties and Claims support for Minecraft 1.21.1 / NeoForge.
+- Replaced backend-specific artifacts with one universal JAR that automatically selects FTB Chunks or OpenPAC when exactly one is installed.
+- Added fail-closed behavior: when both or neither backend is installed, the server starts but `/buyclaim` is disabled without consuming payment.
+- Kept the existing mod ID, command, configuration keys, default price curve, limits, messages, and inventory behavior for both backends.
+- Extracted command handling, pricing, inventory payment, limit checks, logging, and transaction ordering into a shared purchase core.
+- Added compare-before-write checks so concurrent administrator changes are never overwritten by a stale purchase.
+- Added verified rollback for backend capacity and the purchase ledger when an already validated payment unexpectedly cannot be consumed.
+- Stored OpenPAC purchases in `BONUS_CHUNK_CLAIMS`; FTB Chunks or OpenPAC remains the source of truth for current capacity.
+- Added a server-side purchase ledger that records currency ID, paid capacity, and lifetime consumed items per player UUID.
+- Added retroactive numeric-curve reconciliation without claim confiscation:
+  - price increases carry the unpaid cumulative difference into the next purchase;
+  - price decreases grant compensation capacity supported by previous payments;
+  - credit that cannot fit under `maxExtraClaims` continues to reduce later prices.
+- Treats a change to `itemRequired` as a new baseline because different currencies have no automatic exchange rate.
+- Added a compatibility baseline for pre-ledger worlds so existing backend capacity keeps its current next-price position and exact tracking begins from the upgrade point.
+- Added diagnostics for non-zero OpenPAC base claim capacity and non-writable bonus settings without mutating OpenPAC configuration.
+- Added one-JAR inspection, FTB and OpenPAC GameTests, two-process backend and purchase-ledger restart persistence tests, dedicated-server smoke tests, and both/neither-backend startup guards.
+- Added English and Japanese default-configuration, price-curve, repricing-ledger, setting-change, OpenPAC setup, migration, and Modrinth publication documentation.
+- Added third-party license notices while keeping FTB Chunks and OpenPAC external and unbundled.
+
+### Default economy
+
+```toml
+[general]
+itemRequired = "minecraft:diamond"
+amountRequired = 4
+priceGrowthFactor = 3.45
+priceExponent = 0.5
+maxExtraClaims = 100
+maxPurchaseAmount = 100
+```
+
+Existing `buyclaimchunks-common.toml` files are preserved. Stop the server,
+edit the file, save it, and restart to change the economy. Older configs may
+retain `amountRequired = 1`; change it to `4` or regenerate the file while the
+server is stopped to use the current default curve.
+
+### Price-curve changes
+
+For the same currency item, future purchases are priced from the player's
+lifetime consumed amount:
+
+```text
+next payment
+= cumulative cost through the paid claims after this purchase under the active curve
+- lifetime consumed amount
+```
+
+Existing claims are never removed after a price increase. A price decrease can
+grant compensation claims on the next successful purchase. Changing the
+currency item starts a new baseline instead of attempting an implicit exchange
+rate.
+
+### OpenPAC server model
+
+For an all-paid claim model, configure the effective OpenPAC base claim limit,
+party/member bonuses, owner bonus, and permission/rank overrides to `0`.
+Purchased capacity is stored in the player's effective
+`BONUS_CHUNK_CLAIMS` value.
+
+### Upgrade notes
+
+- Existing FTB Chunks users keep their FTB personal extra-claim quota and existing BuyClaimChunks configuration.
+- Replace an older BuyClaimChunks Continued JAR with the single universal 1.2.0 JAR.
+- Install exactly one backend: FTB Chunks or OpenPAC.
+- On first use after upgrading from a version without the purchase ledger, current backend capacity is treated as already paid at the active curve.
+- Automatic FTB-to-OpenPAC quota migration is not provided, to avoid duplicating capacity while both data sets remain in backups.
 
 ## 1.1.1 - 2026-07-26
 
@@ -15,6 +80,8 @@
 - Added NeoForge GameTests for command registration, multi-stack payments, insufficient-payment safety, and the default price total.
 - Added packaged-JAR validation for metadata, licensing notices, classes, branding, and the GameTest structure.
 - Added a validated tag-triggered GitHub Release workflow that publishes the JAR and its SHA-256 checksum.
+- Added an end-to-end, two-process NeoForge GameTest that executes the real `/buyclaim` command, verifies FTB Chunks personal quota `0 -> 1`, verifies payment `4 -> 0`, shuts the server down normally, restarts from the same world, and confirms the personal quota reloads as `1`.
+- Added the restart-persistence check to pull-request CI and release validation.
 
 ## 1.1.0 - 2026-07-23
 
