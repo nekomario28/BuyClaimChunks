@@ -4,11 +4,31 @@ plugins {
     id 'net.neoforged.moddev' version '2.0.142'
 }
 
+def claimBackend = (findProperty('claim_backend') ?: 'ftb').toString()
+if (!(claimBackend in ['ftb', 'openpac'])) {
+    throw new GradleException("Unsupported claim_backend '${claimBackend}'. Expected 'ftb' or 'openpac'.")
+}
+
+def backendConfig = [
+        ftb: [
+                dependencyModId: 'ftbchunks',
+                dependencyVersionRange: "[${ftb_chunks_version},2102)",
+                displayName: 'FTB Chunks',
+                description: 'A maintained fork for buying personal FTB Chunks claim capacity with safe transactions and configurable progressive pricing.'
+        ],
+        openpac: [
+                dependencyModId: 'openpartiesandclaims',
+                dependencyVersionRange: "[${openpac_version},)",
+                displayName: 'Open Parties and Claims',
+                description: 'Buy personal Open Parties and Claims bonus claim capacity with the same safe transactions and configurable progressive pricing as the FTB build.'
+        ]
+][claimBackend]
+
 group = mod_group_id
 version = mod_version
 
 base {
-    archivesName = "buyclaimchunks-continued-neoforge-${minecraft_version}"
+    archivesName = "buyclaimchunks-continued-${claimBackend}-neoforge-${minecraft_version}"
 }
 
 java {
@@ -22,9 +42,25 @@ repositories {
     maven {
         url = 'https://maven.architectury.dev/'
     }
+    maven {
+        url = 'https://cursemaven.com'
+        content {
+            includeGroup 'curse.maven'
+        }
+    }
 }
 
-def integrationGameDirectory = file('run-integration')
+sourceSets {
+    main {
+        java.srcDir "src/${claimBackend}/java"
+    }
+}
+
+if (claimBackend == 'openpac') {
+    sourceSets.main.java.exclude 'me/skyadri/buyclaimchunks/BuyClaimChunksRestartIntegrationGameTests.java'
+}
+
+def integrationGameDirectory = file("run-integration-${claimBackend}")
 def integrationStateFile = new File(integrationGameDirectory, 'purchase-state.properties')
 
 neoForge {
@@ -43,12 +79,14 @@ neoForge {
         gameTestServer {
             type = 'gameTestServer'
             systemProperty 'neoforge.enabledGameTestNamespaces', mod_id
+            systemProperty 'buyclaimchunks.backend', claimBackend
         }
 
         integrationSeed {
             type = 'gameTestServer'
             gameDirectory = integrationGameDirectory
             systemProperty 'neoforge.enabledGameTestNamespaces', mod_id
+            systemProperty 'buyclaimchunks.backend', claimBackend
             systemProperty 'buyclaimchunks.integrationPhase', 'seed'
             systemProperty 'buyclaimchunks.integrationStateFile', integrationStateFile.absolutePath
             disableIdeRun()
@@ -58,6 +96,7 @@ neoForge {
             type = 'gameTestServer'
             gameDirectory = integrationGameDirectory
             systemProperty 'neoforge.enabledGameTestNamespaces', mod_id
+            systemProperty 'buyclaimchunks.backend', claimBackend
             systemProperty 'buyclaimchunks.integrationPhase', 'verify'
             systemProperty 'buyclaimchunks.integrationStateFile', integrationStateFile.absolutePath
             disableIdeRun()
@@ -77,10 +116,14 @@ neoForge {
 }
 
 dependencies {
-    implementation "dev.architectury:architectury-neoforge:${architectury_version}"
-    implementation "dev.ftb.mods:ftb-library-neoforge:${ftb_library_version}"
-    implementation "dev.ftb.mods:ftb-teams-neoforge:${ftb_teams_version}"
-    implementation "dev.ftb.mods:ftb-chunks-neoforge:${ftb_chunks_version}"
+    if (claimBackend == 'ftb') {
+        implementation "dev.architectury:architectury-neoforge:${architectury_version}"
+        implementation "dev.ftb.mods:ftb-library-neoforge:${ftb_library_version}"
+        implementation "dev.ftb.mods:ftb-teams-neoforge:${ftb_teams_version}"
+        implementation "dev.ftb.mods:ftb-chunks-neoforge:${ftb_chunks_version}"
+    } else {
+        implementation "curse.maven:open-parties-and-claims-636608:${openpac_file_id}"
+    }
 
     testImplementation platform('org.junit:junit-bom:5.14.2')
     testImplementation 'org.junit.jupiter:junit-jupiter'
@@ -89,17 +132,20 @@ dependencies {
 
 def generateModMetadata = tasks.register('generateModMetadata', ProcessResources) {
     def replaceProperties = [
-            minecraft_version      : minecraft_version,
-            minecraft_version_range: minecraft_version_range,
-            neo_version_range      : neo_version_range,
-            loader_version_range   : loader_version_range,
-            ftb_chunks_version     : ftb_chunks_version,
-            mod_id                 : mod_id,
-            mod_name               : mod_name,
-            mod_license            : mod_license,
-            mod_version            : mod_version,
-            mod_authors            : mod_authors,
-            mod_description        : mod_description
+            minecraft_version       : minecraft_version,
+            minecraft_version_range : minecraft_version_range,
+            neo_version_range       : neo_version_range,
+            loader_version_range    : loader_version_range,
+            mod_id                  : mod_id,
+            mod_name                : mod_name,
+            mod_license             : mod_license,
+            mod_version             : mod_version,
+            mod_authors             : mod_authors,
+            mod_description         : backendConfig.description,
+            claim_backend           : claimBackend,
+            claim_backend_name      : backendConfig.displayName,
+            claim_dependency_mod_id : backendConfig.dependencyModId,
+            claim_dependency_range  : backendConfig.dependencyVersionRange
     ]
 
     inputs.properties replaceProperties
@@ -122,4 +168,13 @@ tasks.named('test', Test) {
 tasks.named('jar', Jar) {
     from('LICENSE')
     from('NOTICE')
+    manifest {
+        attributes('BuyClaimChunks-Backend': claimBackend)
+    }
+}
+
+tasks.register('printClaimBackend') {
+    doLast {
+        println claimBackend
+    }
 }
