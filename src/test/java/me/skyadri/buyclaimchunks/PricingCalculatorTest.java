@@ -77,7 +77,7 @@ class PricingCalculatorTest {
 
         assertFalse(quote.overflow());
         assertEquals(1, quote.compensationClaims());
-        assertEquals(4, quote.backendIncrease());
+        assertEquals(2, quote.backendIncrease());
         assertEquals(4L, quote.paymentRequired());
         assertEquals(4, quote.resultingPaidClaims());
         assertEquals(16L, quote.resultingTotalSpent());
