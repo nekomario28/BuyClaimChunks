@@ -16,9 +16,9 @@ concurrency:
 
 jobs:
   validate:
-    name: FTB and OpenPAC backend validation
+    name: Universal JAR validation
     runs-on: buyclaimchunks
-    timeout-minutes: 120
+    timeout-minutes: 150
 
     steps:
       - name: Check out repository
@@ -36,96 +36,82 @@ jobs:
           cache-provider: basic
           validate-wrappers: true
 
-      - name: Build and unit test FTB backend
+      - name: Build and unit test universal JAR
         shell: bash
         run: |
           set -o pipefail
           ./gradlew clean test build \
-            -Pclaim_backend=ftb \
-            --no-daemon --stacktrace 2>&1 | tee build-ftb.log
+            -Ptest_backend=none \
+            --no-daemon --stacktrace 2>&1 | tee build-universal.log
 
-      - name: Verify FTB release JAR
-        run: bash scripts/verify-release-jar.sh ftb
+      - name: Verify universal release JAR
+        run: bash scripts/verify-release-jar.sh
 
-      - name: Run FTB NeoForge GameTests
+      - name: Run FTB Chunks NeoForge GameTests
         shell: bash
         run: |
           set -o pipefail
           ./gradlew runGameTestServer \
-            -Pclaim_backend=ftb \
+            -Ptest_backend=ftb \
             --no-daemon --console=plain 2>&1 | tee gametest-ftb.log
 
-      - name: Run FTB purchase and restart integration
+      - name: Run FTB Chunks purchase and restart integration
         run: bash scripts/run-ftb-restart-integration.sh
 
-      - name: Smoke test FTB dedicated server
+      - name: Smoke test FTB Chunks selection
         run: bash scripts/run-backend-server-smoke.sh ftb
-
-      - name: Upload FTB evidence
-        uses: actions/upload-artifact@v7
-        with:
-          name: buyclaimchunks-ftb-${{ github.sha }}
-          path: |
-            build/libs/*.jar
-            build/reports/tests/test/
-            build-ftb.log
-            gametest-ftb.log
-            integration-seed.log
-            integration-verify.log
-            run-integration-ftb/purchase-state.properties
-            server-smoke-ftb.log
-          if-no-files-found: error
-          retention-days: 14
-
-      - name: Build and unit test OpenPAC backend
-        shell: bash
-        run: |
-          set -o pipefail
-          ./gradlew clean test build \
-            -Pclaim_backend=openpac \
-            --no-daemon --stacktrace 2>&1 | tee build-openpac.log
-
-      - name: Verify OpenPAC release JAR
-        run: bash scripts/verify-release-jar.sh openpac
 
       - name: Run OpenPAC NeoForge GameTests
         shell: bash
         run: |
           set -o pipefail
           ./gradlew runGameTestServer \
-            -Pclaim_backend=openpac \
+            -Ptest_backend=openpac \
             --no-daemon --console=plain 2>&1 | tee gametest-openpac.log
 
       - name: Run OpenPAC purchase and restart integration
         run: bash scripts/run-openpac-restart-integration.sh
 
-      - name: Smoke test OpenPAC dedicated server
+      - name: Smoke test OpenPAC selection
         run: bash scripts/run-backend-server-smoke.sh openpac
 
-      - name: Upload OpenPAC evidence
+      - name: Verify no-backend fail-closed startup
+        run: bash scripts/run-backend-server-smoke.sh none
+
+      - name: Verify dual-backend fail-closed startup
+        run: bash scripts/run-backend-server-smoke.sh both
+
+      - name: Upload universal release evidence
+        if: success()
         uses: actions/upload-artifact@v7
         with:
-          name: buyclaimchunks-openpac-${{ github.sha }}
+          name: buyclaimchunks-universal-${{ github.sha }}
           path: |
             build/libs/*.jar
             build/reports/tests/test/
-            build-openpac.log
+            build-universal.log
+            gametest-ftb.log
             gametest-openpac.log
+            integration-seed.log
+            integration-verify.log
             openpac-integration-seed.log
             openpac-integration-verify.log
+            run-integration-ftb/purchase-state.properties
             run-integration-openpac/purchase-state.properties
+            server-smoke-ftb.log
             server-smoke-openpac.log
+            server-smoke-none.log
+            server-smoke-both.log
           if-no-files-found: error
           retention-days: 14
 
-      - name: Upload combined diagnostics
+      - name: Upload diagnostics
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: test-diagnostics-${{ github.sha }}
           path: |
-            build-ftb.log
-            build-openpac.log
+            build-universal.log
             gametest-ftb.log
             gametest-openpac.log
             integration-seed.log
@@ -134,6 +120,8 @@ jobs:
             openpac-integration-verify.log
             server-smoke-ftb.log
             server-smoke-openpac.log
+            server-smoke-none.log
+            server-smoke-both.log
             run/logs/latest.log
             run/crash-reports/
             run-integration-ftb/purchase-state.properties
