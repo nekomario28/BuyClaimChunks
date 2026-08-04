@@ -17,7 +17,7 @@ concurrency:
 jobs:
   build:
     name: ${{ matrix.backend }} backend validation
-    runs-on: [self-hosted, buyclaimchunks]
+    runs-on: buyclaimchunks
     timeout-minutes: 75
     strategy:
       fail-fast: false
