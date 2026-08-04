@@ -1,4 +1,4 @@
-# Universal FTB Chunks / OpenPAC backend plan
+# Universal FTB Chunks / OpenPAC backend and repricing-ledger plan
 
 ## Baseline and target
 
@@ -10,7 +10,7 @@
 
 ## Goal
 
-Publish one BuyClaimChunks Continued JAR that provides the same player-visible economy with either FTB Chunks or Open Parties and Claims.
+Publish one BuyClaimChunks Continued JAR that provides the same player-visible economy with either FTB Chunks or Open Parties and Claims, and safely reconciles later numeric price-curve changes without confiscating existing claims.
 
 ```text
 buyclaimchunks-continued-neoforge-1.21.1-1.2.0.jar
@@ -33,15 +33,19 @@ Both/neither configurations must fail closed without crashing the server or cons
 - `/buyclaim <amount>` buys multiple sequentially priced slots.
 - The command remains player-only.
 - Both backends use the same `config/buyclaimchunks-common.toml` keys and defaults.
-- Current backend-owned extra capacity determines price and `maxExtraClaims` position.
-- Administrator-granted capacity counts.
+- BuyClaimChunks-paid capacity determines the price-curve position.
+- Administrator-granted backend capacity does not create purchase-history credit, but still counts toward `maxExtraClaims`.
+- The server stores currency ID, paid-capacity count, and lifetime consumed amount per player UUID.
+- Numeric price increases never remove existing claims; cumulative shortfall is carried into the next purchase.
+- Numeric price decreases grant compensation capacity supported by previous payments, bounded by remaining backend capacity.
+- Changing `itemRequired` starts a new same-capacity baseline because different currencies have no implicit exchange rate.
 - Payment uses the normal 36-slot inventory including hotbar, excluding armor and offhand.
-- Capacity is updated and verified before payment is consumed.
+- Backend capacity and purchase-ledger state are updated and verified before payment is consumed.
 - Concurrent changes reject the transaction instead of being overwritten.
 - Failed updates consume no items.
-- Unexpected payment failure attempts a verified capacity rollback.
-- No independent quota or purchase-count database is introduced.
-- Successful purchases survive normal shutdown and a second-JVM restart.
+- Unexpected payment failure attempts verified rollback of both capacity and ledger state.
+- FTB Chunks or OpenPAC remains the source of truth for current capacity; the additional ledger stores economic history only.
+- Successful capacity and ledger updates survive normal shutdown and a second-JVM restart.
 - Automatic claiming, forceload sales, upkeep, unclaim refunds, transfers, and party-shared purchases remain out of scope.
 
 ## Default economy
@@ -56,13 +60,21 @@ maxExtraClaims = 100
 maxPurchaseAmount = 100
 ```
 
-Per-slot price for one-based slot `n`:
+Per-slot price for one-based paid slot `n`:
 
 ```text
 round(amountRequired + priceGrowthFactor * (n ^ priceExponent - 1))
 ```
 
-Existing config files are retained. The documentation must explain the stop-edit-save-restart-test workflow and the old `amountRequired = 1` migration case.
+Future same-currency purchases use:
+
+```text
+next payment
+= active-curve cumulative cost through resulting paid capacity
+- lifetime consumed amount
+```
+
+Existing config files are retained. The documentation must explain the stop-edit-save-restart-test workflow, debt/credit behavior, currency-change baseline, legacy-world baseline, and the old `amountRequired = 1` migration case.
 
 ## Architecture
 
@@ -71,9 +83,11 @@ Existing config files are retained. The documentation must explain the stop-edit
 Backend-independent code owns:
 
 - command registration and validation;
-- pricing and overflow protection;
+- per-slot and cumulative pricing;
+- lifetime-payment debt/credit calculation;
 - inventory counting and consumption;
-- transaction ordering and rollback;
+- purchase-ledger compare-and-set persistence;
+- transaction ordering and dual rollback;
 - configuration, messages, and logging.
 
 Backend contract:
@@ -90,6 +104,21 @@ interface ClaimCapacityBackend {
     );
 }
 ```
+
+### Purchase ledger
+
+World `SavedData` stores one account per player UUID:
+
+```text
+currencyItemId
+paidClaims
+totalSpent
+schemaVersion
+```
+
+The ledger does not replace backend quota data. It records only the economic history required to calculate future debt or credit.
+
+For a world created before the ledger, the first account treats current backend extra capacity as paid at the active curve. This preserves the old next-price position and begins exact tracking from the upgrade point. Because legacy backend data cannot distinguish purchases from administrator grants, this is explicitly documented as a compatibility baseline.
 
 ### Runtime selector
 
@@ -130,9 +159,21 @@ purchased capacity = BONUS_CHUNK_CLAIMS
 
 The mod must warn but never silently mutate OpenPAC configuration.
 
+## Transaction order
+
+1. Read backend capacity and the active ledger snapshot.
+2. Validate requested amount and remaining total capacity.
+3. Calculate carried debt, available compensation credit, requested capacity, and required payment.
+4. Validate inventory payment.
+5. Compare-before-write and verify backend capacity.
+6. Compare-and-set the ledger from the quoted snapshot to the result.
+7. Consume payment.
+8. If payment unexpectedly fails, restore both backend capacity and the ledger snapshot.
+9. Report success only after all three states are confirmed.
+
 ## Packaging and license boundary
 
-The universal JAR contains both thin adapters but does not contain FTB Chunks or OpenPAC classes/assets.
+The universal JAR contains both thin adapters and the project-owned economic ledger, but does not contain FTB Chunks or OpenPAC classes/assets.
 
 - FTB Chunks is an external All Rights Reserved / visible-source dependency.
 - OpenPAC is an external LGPL-3.0-only dependency.
@@ -144,11 +185,20 @@ The universal JAR contains both thin adapters but does not contain FTB Chunks or
 
 ## Test and CI gates
 
+### Unit tests
+
+- published default per-slot and batch examples;
+- cumulative-price and affordable-capacity inverse behavior;
+- price increase carries cumulative shortfall into the next purchase;
+- price decrease grants supported compensation capacity;
+- credit limited by remaining capacity carries forward;
+- overflow and invalid-input rejection.
+
 ### Universal artifact
 
 - exactly one non-sources JAR;
 - universal file name;
-- both adapter classes and unavailable adapter present;
+- both adapter classes, unavailable adapter, repricing result, and purchase ledger present;
 - no FTB/OpenPAC dependency classes embedded;
 - both dependencies declared optional;
 - required license and notice files present.
@@ -159,7 +209,8 @@ The universal JAR contains both thin adapters but does not contain FTB Chunks or
 - selected backend is `ftb`;
 - real purchase `0 -> 1`;
 - payment `4 -> 0`;
-- normal shutdown and second-JVM reload;
+- ledger records diamond currency, paid capacity `1`, and total spent `4`;
+- normal shutdown and second-JVM reload of both FTB capacity and ledger state;
 - dedicated server reaches `Done`.
 
 ### OpenPAC environment
@@ -169,14 +220,15 @@ The universal JAR contains both thin adapters but does not contain FTB Chunks or
 - real bonus purchase `0 -> 1`;
 - zero-base full limit `0 -> 1`;
 - payment `4 -> 0`;
-- normal shutdown and second-JVM reload;
+- ledger records diamond currency, paid capacity `1`, and total spent `4`;
+- normal shutdown and second-JVM reload of both OpenPAC capacity and ledger state;
 - dedicated server reaches `Done`.
 
 ### Misconfiguration guards
 
-- no backend: server reaches `Done`, unavailable adapter selected;
-- both backends: server reaches `Done`, unavailable adapter selected;
-- neither case may silently choose a backend.
+- no backend: `/buyclaim` rejects with payment unchanged and server reaches `Done`;
+- both backends: `/buyclaim` rejects with payment unchanged and server reaches `Done`;
+- neither case may silently choose a backend or create a successful paid transaction.
 
 ## Documentation and publication
 
@@ -184,6 +236,7 @@ Required release material:
 
 - English and Japanese READMEs;
 - exact defaults and setting-change steps;
+- English and Japanese repricing-ledger guides;
 - OpenPAC zero-base setup and migration guides;
 - universal-JAR license review;
 - bilingual Modrinth project description;
@@ -195,4 +248,4 @@ OpenPAC can be linked as an optional Modrinth dependency. FTB Chunks remains an 
 
 ## Definition of done
 
-The work is complete when one universal artifact exposes identical commands, settings, prices, limits, payment safety, and restart persistence with either supported backend; safely disables purchases with both or neither backend; passes every self-hosted CI gate; and is ready for explicit merge and release authorization.
+The work is complete when one universal artifact exposes identical commands, settings, price-reconciliation behavior, limits, payment safety, and restart persistence with either supported backend; never confiscates existing claims after a price increase; safely disables purchases with both or neither backend; passes every self-hosted CI gate; and is ready for explicit merge and release authorization.
