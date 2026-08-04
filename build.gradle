@@ -18,7 +18,7 @@ def backendConfig = [
         ],
         openpac: [
                 dependencyModId: 'openpartiesandclaims',
-                dependencyVersionRange: "[${openpac_version},0.28)",
+                dependencyVersionRange: "[${openpac_min_version},0.30)",
                 displayName: 'Open Parties and Claims',
                 description: 'Buy personal Open Parties and Claims bonus claim capacity with the same safe transactions and configurable progressive pricing as the FTB build.'
         ]
