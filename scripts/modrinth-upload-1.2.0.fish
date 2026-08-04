@@ -5,9 +5,15 @@ set -l REPO_ROOT (cd "$SCRIPT_DIR/.."; and pwd)
 set -l PROJECT_SLUG "buyclaimchunks-continued"
 set -l OPENPAC_PROJECT_ID "gF3BGWvG"
 set -l VERSION "1.2.0"
-set -l JAR "$REPO_ROOT/build/libs/buyclaimchunks-continued-neoforge-1.21.1-$VERSION.jar"
+set -l DEFAULT_JAR "$REPO_ROOT/build/libs/buyclaimchunks-continued-neoforge-1.21.1-$VERSION.jar"
 set -l CHANGELOG "$REPO_ROOT/docs/modrinth-release-1.2.0.md"
 set -l USER_AGENT "nekomario28/BuyClaimChunks-Continued/$VERSION"
+
+if set -q MODRINTH_RELEASE_JAR; and test -n "$MODRINTH_RELEASE_JAR"
+    set JAR "$MODRINTH_RELEASE_JAR"
+else
+    set JAR "$DEFAULT_JAR"
+end
 
 if not set -q MODRINTH_TOKEN; or test -z "$MODRINTH_TOKEN"
     echo "MODRINTH_TOKEN is not set." >&2
@@ -17,11 +23,11 @@ end
 
 if not set -q EXPECTED_SHA256; or test -z "$EXPECTED_SHA256"
     echo "EXPECTED_SHA256 is not set." >&2
-    echo "Set it to the SHA-256 from the fully validated universal CI artifact." >&2
+    echo "Set it to the SHA-256 recorded for the fully validated universal CI artifact." >&2
     exit 1
 end
 
-for command_name in curl jq sha256sum mktemp
+for command_name in curl jq sha256sum mktemp unzip jar
     if not type -q $command_name
         echo "Required command is missing: $command_name" >&2
         exit 1
@@ -30,28 +36,47 @@ end
 
 cd "$REPO_ROOT"; or exit 1
 
-if not ./gradlew clean test build -Ptest_backend=none --no-daemon --stacktrace
-    echo "Universal JAR build failed." >&2
-    exit 1
-end
-
-if not bash scripts/verify-release-jar.sh
-    echo "Universal JAR verification failed." >&2
-    exit 1
-end
-
 for required_file in "$JAR" "$CHANGELOG"
     if not test -f "$required_file"
         echo "Missing file: $required_file" >&2
+        echo "Download and extract the exact successful CI artifact; do not rebuild it before upload." >&2
         exit 1
     end
 end
 
+# Release upload must use the exact CI artifact. Rebuilding here could produce a
+# different byte-for-byte JAR even from identical source, so the script only
+# inspects and hashes the provided file.
 set -l actual_sha256 (sha256sum "$JAR" | string split ' ' | head -n 1)
 if test "$actual_sha256" != "$EXPECTED_SHA256"
     echo "JAR SHA-256 does not match the validated release file." >&2
     echo "Expected: $EXPECTED_SHA256" >&2
     echo "Actual:   $actual_sha256" >&2
+    exit 1
+end
+
+set -l entries (jar tf "$JAR")
+for required_entry in \
+    META-INF/neoforge.mods.toml \
+    LICENSE \
+    NOTICE \
+    THIRD_PARTY_NOTICES.md \
+    me/skyadri/buyclaimchunks/FtbClaimCapacityBackend.class \
+    me/skyadri/buyclaimchunks/OpenPacClaimCapacityBackend.class \
+    me/skyadri/buyclaimchunks/UnavailableClaimCapacityBackend.class
+    if not string match -qx "$required_entry" $entries
+        echo "Release JAR is missing required universal entry: $required_entry" >&2
+        exit 1
+    end
+end
+
+set -l metadata (unzip -p "$JAR" META-INF/neoforge.mods.toml)
+if not string match -q '*modId="ftbchunks"*type="optional"*' (string join '' $metadata)
+    echo "Release metadata does not declare FTB Chunks as optional." >&2
+    exit 1
+end
+if not string match -q '*modId="openpartiesandclaims"*type="optional"*' (string join '' $metadata)
+    echo "Release metadata does not declare OpenPAC as optional." >&2
     exit 1
 end
 
@@ -104,7 +129,7 @@ jq -n \
       environment: "server_only_client_optional"
     }' > "$version_data"
 
-echo "Uploading the validated universal JAR as version $VERSION..."
+echo "Uploading exact validated universal JAR as version $VERSION..."
 if not curl --fail-with-body --silent --show-error \
     -X POST "https://api.modrinth.com/v2/version" \
     -H "Authorization: $MODRINTH_TOKEN" \
