@@ -3,6 +3,7 @@ package me.skyadri.buyclaimchunks;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class PricingCalculatorTest {
@@ -34,6 +35,75 @@ class PricingCalculatorTest {
     }
 
     @Test
+    void cumulativePriceAndBudgetSearchAreInverseWithinTheConfiguredCap() {
+        assertEquals(31, PricingCalculator.cumulativePrice(5, BASE_PRICE, GROWTH_FACTOR, EXPONENT));
+        assertEquals(5, PricingCalculator.maxAffordableClaims(31, 100, BASE_PRICE, GROWTH_FACTOR, EXPONENT));
+        assertEquals(4, PricingCalculator.maxAffordableClaims(30, 100, BASE_PRICE, GROWTH_FACTOR, EXPONENT));
+    }
+
+    @Test
+    void increasedCurveCarriesTheShortfallIntoTheNextPurchase() {
+        RepricedPurchase quote = PricingCalculator.quoteRepricedPurchase(
+                2,
+                2L,
+                1,
+                10,
+                100,
+                4L,
+                0.0D,
+                0.5D
+        );
+
+        assertFalse(quote.overflow());
+        assertEquals(0, quote.compensationClaims());
+        assertEquals(6L, quote.carriedDebt());
+        assertEquals(10L, quote.paymentRequired());
+        assertEquals(3, quote.resultingPaidClaims());
+        assertEquals(12L, quote.resultingTotalSpent());
+    }
+
+    @Test
+    void cheaperCurveGrantsClaimsSupportedByPreviousPayments() {
+        RepricedPurchase quote = PricingCalculator.quoteRepricedPurchase(
+                2,
+                12L,
+                1,
+                10,
+                100,
+                4L,
+                0.0D,
+                0.5D
+        );
+
+        assertFalse(quote.overflow());
+        assertEquals(1, quote.compensationClaims());
+        assertEquals(4, quote.backendIncrease());
+        assertEquals(4L, quote.paymentRequired());
+        assertEquals(4, quote.resultingPaidClaims());
+        assertEquals(16L, quote.resultingTotalSpent());
+    }
+
+    @Test
+    void compensationIsLimitedByRemainingBackendCapacityAndCreditCarriesForward() {
+        RepricedPurchase quote = PricingCalculator.quoteRepricedPurchase(
+                2,
+                20L,
+                1,
+                1,
+                100,
+                4L,
+                0.0D,
+                0.5D
+        );
+
+        assertEquals(1, quote.compensationClaims());
+        assertEquals(2, quote.backendIncrease());
+        assertEquals(0L, quote.paymentRequired());
+        assertEquals(4, quote.resultingPaidClaims());
+        assertEquals(20L, quote.resultingTotalSpent());
+    }
+
+    @Test
     void zeroGrowthOrExponentProducesAConstantPrice() {
         assertEquals(BASE_PRICE, PricingCalculator.priceForClaim(100, BASE_PRICE, 0.0D, EXPONENT));
         assertEquals(BASE_PRICE, PricingCalculator.priceForClaim(100, BASE_PRICE, GROWTH_FACTOR, 0.0D));
@@ -61,6 +131,10 @@ class PricingCalculatorTest {
         assertThrows(
                 IllegalArgumentException.class,
                 () -> PricingCalculator.totalPrice(0, 0, BASE_PRICE, GROWTH_FACTOR, EXPONENT)
+        );
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> PricingCalculator.quoteRepricedPurchase(-1, 0, 1, 0, 100, BASE_PRICE, GROWTH_FACTOR, EXPONENT)
         );
     }
 }
