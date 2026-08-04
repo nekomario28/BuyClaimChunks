@@ -23,16 +23,17 @@ EOF
 
 set -o pipefail
 ./gradlew runIntegrationSeed \
-  -Pclaim_backend=openpac \
+  -Ptest_backend=openpac \
   --no-daemon --console=plain 2>&1 | tee openpac-integration-seed.log
 
 test -s run-integration-openpac/purchase-state.properties
 
 ./gradlew runIntegrationVerify \
-  -Pclaim_backend=openpac \
+  -Ptest_backend=openpac \
   --no-daemon --console=plain 2>&1 | tee openpac-integration-verify.log
 
 grep -Eq 'All [0-9]+ required tests passed' openpac-integration-seed.log
 grep -Eq 'All [0-9]+ required tests passed' openpac-integration-verify.log
+grep -Fq 'initialized with openpac backend' openpac-integration-seed.log
 
-echo 'OpenPAC bonus purchase, zero-base full limit, payment, shutdown save, and restart reload integration passed.'
+echo 'Universal JAR: OpenPAC bonus purchase, zero-base full limit, payment, shutdown save, and restart reload passed.'
