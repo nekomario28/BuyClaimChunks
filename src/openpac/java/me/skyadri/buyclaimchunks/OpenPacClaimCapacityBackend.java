@@ -31,9 +31,12 @@ final class OpenPacClaimCapacityBackend implements ClaimCapacityBackend {
         if (server == null) {
             return 0;
         }
-        return OpenPACServerAPI.get(server)
-                .getServerClaimsManager()
-                .getPlayerFullClaimLimit(player);
+
+        OpenPACServerAPI api = OpenPACServerAPI.get(server);
+        return addLimits(
+                api.getServerClaimsManager().getPlayerBaseClaimLimit(player),
+                getExtraClaims(player)
+        );
     }
 
     @Override
@@ -62,14 +65,11 @@ final class OpenPacClaimCapacityBackend implements ClaimCapacityBackend {
             }
 
             int baseBefore = api.getServerClaimsManager().getPlayerBaseClaimLimit(player);
-            int fullBefore = api.getServerClaimsManager().getPlayerFullClaimLimit(player);
-            if (fullBefore != baseBefore + observedBefore) {
-                BuyClaimChunks.LOGGER.warn(
-                        "OpenPAC claim limit invariant is unexpected for player {}: base={}, bonus={}, full={}",
-                        player.getGameProfile().getName(),
-                        baseBefore,
+            int fullBefore = addLimits(baseBefore, observedBefore);
+            if (fullBefore < observedBefore) {
+                return ClaimCapacityUpdate.error(
                         observedBefore,
-                        fullBefore
+                        "OpenPAC claim limit overflowed before the update."
                 );
             }
 
@@ -87,7 +87,7 @@ final class OpenPacClaimCapacityBackend implements ClaimCapacityBackend {
 
             int observedAfter = playerConfig.getEffective(PlayerConfigOptions.BONUS_CHUNK_CLAIMS);
             int baseAfter = api.getServerClaimsManager().getPlayerBaseClaimLimit(player);
-            int fullAfter = api.getServerClaimsManager().getPlayerFullClaimLimit(player);
+            int fullAfter = addLimits(baseAfter, observedAfter);
 
             if (observedAfter != newValue) {
                 return ClaimCapacityUpdate.rejected(
@@ -95,10 +95,10 @@ final class OpenPacClaimCapacityBackend implements ClaimCapacityBackend {
                         "OpenPAC did not persist the requested bonus claim value."
                 );
             }
-            if (fullAfter != baseAfter + observedAfter) {
+            if (fullAfter < observedAfter) {
                 return ClaimCapacityUpdate.rejected(
                         observedAfter,
-                        "OpenPAC full claim limit does not equal base plus bonus capacity."
+                        "OpenPAC full claim limit overflowed after the update."
                 );
             }
 
@@ -119,5 +119,10 @@ final class OpenPacClaimCapacityBackend implements ClaimCapacityBackend {
             );
             return ClaimCapacityUpdate.error(expectedCurrent, "OpenPAC capacity update failed unexpectedly.");
         }
+    }
+
+    private static int addLimits(int base, int bonus) {
+        long total = (long) base + bonus;
+        return total > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) total;
     }
 }
