@@ -20,7 +20,10 @@ public class BuyClaimCommand {
                 Commands.literal("buyclaim")
                         .then(
                                 Commands.argument("amount", IntegerArgumentType.integer(1))
-                                        .executes(context -> executeBuy(context.getSource(), IntegerArgumentType.getInteger(context, "amount")))
+                                        .executes(context -> executeBuy(
+                                                context.getSource(),
+                                                IntegerArgumentType.getInteger(context, "amount")
+                                        ))
                         )
                         .executes(context -> executeBuy(context.getSource(), 1))
         );
@@ -28,7 +31,6 @@ public class BuyClaimCommand {
 
     private static int executeBuy(CommandSourceStack source, int amount) {
         ServerPlayer player;
-
         try {
             player = source.getPlayerOrException();
         } catch (CommandSyntaxException exception) {
@@ -49,10 +51,27 @@ public class BuyClaimCommand {
             return 0;
         }
 
-        int maxClaims = Config.getMaxExtraClaims();
-        int currentClaims = ClaimHelper.getExtraClaims(player);
+        ClaimCapacityBackend backend = BuyClaimChunks.getClaimBackend();
+        int currentClaims;
+        try {
+            currentClaims = backend.getExtraClaims(player);
+        } catch (RuntimeException exception) {
+            BuyClaimChunks.LOGGER.error(
+                    "Failed to read {} claim capacity for player {}",
+                    backend.id(),
+                    player.getGameProfile().getName(),
+                    exception
+            );
+            player.sendSystemMessage(
+                    Component.literal("The claim capacity backend is unavailable. No items were consumed.")
+                            .withStyle(ChatFormatting.RED)
+            );
+            return 0;
+        }
 
-        if ((long) currentClaims + amount > maxClaims) {
+        int maxClaims = Config.getMaxExtraClaims();
+        long resultingClaims = (long) currentClaims + amount;
+        if (resultingClaims > maxClaims || resultingClaims > Integer.MAX_VALUE) {
             player.sendSystemMessage(
                     Component.literal("You cannot buy that many extra claim chunks! Maximum of ")
                             .append(Component.literal(String.valueOf(maxClaims)).withStyle(ChatFormatting.LIGHT_PURPLE))
@@ -84,7 +103,8 @@ public class BuyClaimCommand {
                 : BuiltInRegistries.ITEM.getOptional(itemId).orElse(null);
         if (requiredItem == null) {
             player.sendSystemMessage(
-                    Component.literal("The configured item for buying claim chunks does not exist!").withStyle(ChatFormatting.RED)
+                    Component.literal("The configured item for buying claim chunks does not exist!")
+                            .withStyle(ChatFormatting.RED)
             );
             return 0;
         }
@@ -105,43 +125,47 @@ public class BuyClaimCommand {
             return 0;
         }
 
-        String ftbCmd = "ftbchunks admin extra_claim_chunks "
-                + player.getName().getString()
-                + " add " + amount;
-
-        var server = source.getServer();
-        int commandResult;
-        try {
-            commandResult = server.getCommands().getDispatcher().execute(
-                    ftbCmd,
-                    server.createCommandSourceStack()
-                            .withPermission(4)
-                            .withSuppressedOutput()
-            );
-        } catch (CommandSyntaxException exception) {
+        int targetClaims = (int) resultingClaims;
+        ClaimCapacityUpdate update = backend.setExtraClaims(player, currentClaims, targetClaims);
+        if (!update.success()) {
+            if (update.status() == ClaimCapacityUpdate.Status.CONCURRENT_CHANGE) {
+                player.sendSystemMessage(
+                        Component.literal("Your claim capacity changed during the purchase. Try the command again.")
+                                .withStyle(ChatFormatting.RED)
+                );
+            } else {
+                player.sendSystemMessage(
+                        Component.literal("The claim purchase failed. No items were consumed.")
+                                .withStyle(ChatFormatting.RED)
+                );
+            }
             BuyClaimChunks.LOGGER.warn(
-                    "FTB Chunks rejected an extra-claim update for player {}",
+                    "{} capacity update rejected for player {}: status={}, observed={}, detail={}",
+                    backend.id(),
                     player.getGameProfile().getName(),
-                    exception
-            );
-            commandResult = 0;
-        }
-
-        if (commandResult <= 0) {
-            player.sendSystemMessage(
-                    Component.literal("The claim purchase failed. No items were consumed.")
-                            .withStyle(ChatFormatting.RED)
+                    update.status(),
+                    update.observedClaims(),
+                    update.detail()
             );
             return 0;
         }
 
         if (!InventoryPayment.consume(player.getInventory(), requiredItem, totalRequired)) {
+            ClaimCapacityUpdate rollback = backend.setExtraClaims(player, targetClaims, currentClaims);
             BuyClaimChunks.LOGGER.error(
-                    "FTB Chunks increased claim capacity for player {}, but the validated payment could not be consumed",
-                    player.getGameProfile().getName()
+                    "{} increased claim capacity for player {}, but validated payment could not be consumed; rollback status={}, observed={}, detail={}",
+                    backend.id(),
+                    player.getGameProfile().getName(),
+                    rollback.status(),
+                    rollback.observedClaims(),
+                    rollback.detail()
             );
             player.sendSystemMessage(
-                    Component.literal("Claim capacity was increased, but payment could not be completed. Contact a server administrator.")
+                    Component.literal(
+                                    rollback.success()
+                                            ? "Payment could not be completed, so the claim capacity update was rolled back."
+                                            : "Claim capacity was increased, but payment and automatic rollback failed. Contact a server administrator."
+                            )
                             .withStyle(ChatFormatting.RED)
             );
             return 0;
@@ -151,7 +175,6 @@ public class BuyClaimCommand {
                 Component.literal("You have successfully bought " + amount + " extra claim chunk(s)!")
                         .withStyle(ChatFormatting.GREEN)
         );
-
         return 1;
     }
 }
