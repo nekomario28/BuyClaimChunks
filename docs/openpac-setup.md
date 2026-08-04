@@ -1,48 +1,42 @@
-# OpenPAC backend setup
+# OpenPAC setup for the universal JAR
 
-This guide applies to the Open Parties and Claims build of BuyClaimChunks Continued for Minecraft 1.21.1, NeoForge 21.1.x, and Java 21.
+This guide applies to BuyClaimChunks Continued 1.2.0 for Minecraft 1.21.1, NeoForge 21.1.x, and Java 21.
 
-## Choose exactly one backend
+## Installation model
 
-Install one of these mutually exclusive artifacts:
-
-```text
-buyclaimchunks-continued-ftb-neoforge-1.21.1-1.2.0.jar
-buyclaimchunks-continued-openpac-neoforge-1.21.1-1.2.0.jar
-```
-
-Both artifacts use mod ID `buyclaimchunks` and the same config file. They must not be installed together.
-
-The OpenPAC artifact requires Open Parties and Claims 0.27.6 or a compatible release below 0.28. FTB Chunks is not required by the OpenPAC artifact.
-
-## Feature parity
-
-The OpenPAC build intentionally keeps the FTB build's player-visible contract:
-
-- `/buyclaim` buys one personal extra claim slot.
-- `/buyclaim <amount>` buys a batch in one transaction.
-- The same item currency and progressive pricing options are used.
-- The same per-command and total-extra limits are used.
-- Payment is counted across the normal 36-slot inventory, including the hotbar and excluding armor and offhand.
-- Capacity is updated and verified before payment is consumed.
-- A rejected capacity update consumes no payment.
-- Administrator-granted bonus capacity affects the next price and `maxExtraClaims` check.
-- No separate purchase counter or quota database is stored by BuyClaimChunks.
-- The command buys capacity only; it does not automatically claim a map chunk.
-
-For OpenPAC, the source of truth is:
+BuyClaimChunks Continued now ships one file:
 
 ```text
-playerConfig.claims.bonusChunkClaims
+buyclaimchunks-continued-neoforge-1.21.1-1.2.0.jar
 ```
 
-which is exposed through `PlayerConfigOptions.BONUS_CHUNK_CLAIMS`.
+Install that JAR with **Open Parties and Claims only**. Do not also install FTB Chunks. The universal JAR selects OpenPAC automatically when it is the only supported backend present.
+
+If both backends or neither backend are installed, the server starts but purchases are disabled to prevent ambiguous quota updates.
+
+## OpenPAC value used by purchases
+
+Purchases update the player's OpenPAC bonus claim capacity exposed as:
+
+```text
+PlayerConfigOptions.BONUS_CHUNK_CLAIMS
+```
+
+No separate BuyClaimChunks quota database is created. Administrator-granted OpenPAC bonus capacity affects the next price and the `maxExtraClaims` check.
 
 ## All-paid claim configuration
 
-To make every usable claim slot purchasable, the effective OpenPAC base capacity and every source of free capacity must be zero.
+For every usable claim slot to come from purchases, the effective OpenPAC base capacity and all free-capacity sources must be zero.
 
-Stop the server and edit the world/server copy of `openpartiesandclaims-server.toml`. The relevant settings are:
+1. Stop the server.
+2. Back up the world and OpenPAC configuration.
+3. Edit the world's server configuration, normally:
+
+```text
+<world>/serverconfig/openpartiesandclaims-server.toml
+```
+
+4. Set the relevant values:
 
 ```toml
 [serverConfig]
@@ -57,31 +51,20 @@ claimBonusPerPartyMember = 0
 claimBonusForPartyOwner = 0
 ```
 
-Also ensure that no permission plugin, rank, command, or other addon grants a non-zero base claim limit.
+5. Ensure no permission plugin, rank, command, or addon grants a non-zero claim limit.
+6. Restart the server and test with a normal player.
 
-BuyClaimChunks does not silently rewrite OpenPAC configuration. If a player's effective base capacity is non-zero, purchases still work, but some claim capacity remains free and the server log records a warning.
+BuyClaimChunks Continued does not silently rewrite OpenPAC's configuration. A non-zero effective base limit produces a warning and means some capacity remains free.
 
-## Bonus option must be writable
+## BuyClaimChunks default configuration
 
-The OpenPAC player option `BONUS_CHUNK_CLAIMS` must be allowed and not forced to a server default that prevents per-player changes.
-
-A purchase is rejected without payment when OpenPAC reports any of these conditions:
-
-- the option is illegal or unavailable;
-- the option is not directly configurable;
-- the current value changed during the transaction;
-- the requested value was not persisted after the write;
-- OpenPAC was not initialized or failed unexpectedly.
-
-## BuyClaimChunks configuration
-
-The OpenPAC artifact uses the existing file:
+File:
 
 ```text
 config/buyclaimchunks-common.toml
 ```
 
-The keys and defaults are unchanged:
+Defaults:
 
 ```toml
 [general]
@@ -93,50 +76,54 @@ maxExtraClaims = 100
 maxPurchaseAmount = 100
 ```
 
-The price of one-based extra slot number `n` is:
+The one-based slot number `n` costs:
 
 ```text
 round(amountRequired + priceGrowthFactor * (n ^ priceExponent - 1))
 ```
 
-Set `priceGrowthFactor` or `priceExponent` to `0` for a constant price.
+With the defaults, slot 1 costs 4 diamonds, slot 10 costs 11, slot 50 costs 25, and slot 100 costs 35. Set `priceGrowthFactor` or `priceExponent` to `0` for a fixed price.
 
-## Transaction safety
+To change the economy, stop the server, edit `config/buyclaimchunks-common.toml`, save it, restart, and test `/buyclaim`. Existing configs are retained and are not replaced by new defaults.
 
-The purchase order is:
+## Writable bonus option
+
+`BONUS_CHUNK_CLAIMS` must remain writable for the per-player config. A purchase is rejected without charging items when OpenPAC reports that the option is illegal, unavailable, forced to an incompatible default, changed concurrently, or not persisted.
+
+## Transaction behavior
 
 1. Read the current OpenPAC bonus capacity.
-2. Validate purchase and total limits.
-3. Calculate the full batch price.
-4. Validate and count the payment item.
-5. Re-read the capacity to detect concurrent changes.
-6. Write the absolute new bonus value and re-read it for verification.
+2. Validate amount and total limits.
+3. Calculate the full sequential batch price.
+4. Validate and count payment.
+5. Re-read capacity to detect concurrent changes.
+6. Set and verify the absolute new bonus value.
 7. Consume payment.
-8. If payment unexpectedly fails after the verified grant, attempt to restore the previous bonus value and log the result.
+8. Roll back the capacity if validated payment unexpectedly fails.
 
-## Moving from FTB Chunks
+## Migrating from FTB Chunks
 
-There is no automatic FTB-to-OpenPAC quota migration. Automatic migration could duplicate capacity while an administrator still has both claim data sets in a world backup.
+There is no automatic FTB-to-OpenPAC quota migration because automatic conversion can duplicate capacity while both data sets remain in backups.
 
-A safe migration is:
+Recommended process:
 
-1. Back up the world and both claim configurations.
-2. Record every player's FTB personal extra-claim value.
-3. Remove the FTB backend JAR and FTB Chunks only after the backup is complete.
-4. Install OpenPAC and the OpenPAC backend JAR.
-5. Apply the zero-base configuration.
-6. Grant equivalent OpenPAC bonus values manually when preserving purchased capacity is desired.
-7. Test `/buyclaim` with a normal non-operator player before reopening the server.
+1. Back up the world and both configurations.
+2. Record each player's FTB personal extra-claim value.
+3. Remove FTB Chunks and its unused dependencies.
+4. Install OpenPAC while keeping the same universal BuyClaimChunks JAR.
+5. Apply the zero-base OpenPAC configuration.
+6. Grant equivalent OpenPAC bonus values manually when purchased capacity must be preserved.
+7. Verify `/buyclaim` with a normal player before reopening the server.
 
-## Validation performed by CI
+## CI evidence required for release
 
-The OpenPAC release gate requires:
+The universal-JAR release gate tests OpenPAC independently and requires:
 
-- Java 21 unit tests and build;
-- backend-specific JAR inspection with no FTB backend classes;
-- NeoForge GameTests;
-- real `/buyclaim` purchase from bonus `0` to `1`;
-- payment from four diamonds to zero;
-- base limit `0` and derived full limit `1`;
-- normal server shutdown and second-JVM bonus reload;
-- clean dedicated-server startup to Minecraft's `Done` message.
+- unit tests and one universal JAR build;
+- universal JAR inspection with both thin adapters and no bundled claim mod;
+- OpenPAC NeoForge GameTests;
+- real `/buyclaim` capacity `0 -> 1` and payment `4 -> 0`;
+- zero base and full limit `0 -> 1`;
+- normal shutdown and second-JVM reload;
+- clean dedicated-server startup;
+- safe startup with neither or both backends installed.
