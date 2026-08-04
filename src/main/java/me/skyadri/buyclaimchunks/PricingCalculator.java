@@ -128,7 +128,7 @@ public final class PricingCalculator {
 
         long currentCurveCost = cumulativePrice(paidClaims, basePrice, growthFactor, exponent);
         if (currentCurveCost == Long.MAX_VALUE) {
-            return RepricedPurchase.overflow();
+            return RepricedPurchase.overflowResult();
         }
         long carriedDebt = Math.max(0L, currentCurveCost - totalSpent);
 
@@ -149,7 +149,7 @@ public final class PricingCalculator {
                     purchaseAmount
             );
         } catch (ArithmeticException exception) {
-            return RepricedPurchase.overflow();
+            return RepricedPurchase.overflowResult();
         }
 
         long targetCurveCost = cumulativePrice(
@@ -159,7 +159,7 @@ public final class PricingCalculator {
                 exponent
         );
         if (targetCurveCost == Long.MAX_VALUE) {
-            return RepricedPurchase.overflow();
+            return RepricedPurchase.overflowResult();
         }
 
         long paymentRequired = Math.max(0L, targetCurveCost - totalSpent);
@@ -167,7 +167,7 @@ public final class PricingCalculator {
         try {
             resultingTotalSpent = Math.addExact(totalSpent, paymentRequired);
         } catch (ArithmeticException exception) {
-            return RepricedPurchase.overflow();
+            return RepricedPurchase.overflowResult();
         }
 
         return new RepricedPurchase(
