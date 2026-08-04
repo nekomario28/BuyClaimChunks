@@ -70,8 +70,8 @@ public class BuyClaimCommand {
         }
 
         int maxClaims = Config.getMaxExtraClaims();
-        long resultingClaims = (long) currentClaims + amount;
-        if (resultingClaims > maxClaims || resultingClaims > Integer.MAX_VALUE) {
+        long minimumResultingClaims = (long) currentClaims + amount;
+        if (minimumResultingClaims > maxClaims || minimumResultingClaims > Integer.MAX_VALUE) {
             player.sendSystemMessage(
                     Component.literal("You cannot buy that many extra claim chunks! Maximum of ")
                             .append(Component.literal(String.valueOf(maxClaims)).withStyle(ChatFormatting.LIGHT_PURPLE))
@@ -82,22 +82,6 @@ public class BuyClaimCommand {
         }
 
         ResourceLocation itemId = Config.getItemRequired();
-        long totalRequired = PricingCalculator.totalPrice(
-                currentClaims,
-                amount,
-                Config.getAmountRequired(),
-                Config.getPriceGrowthFactor(),
-                Config.getPriceExponent()
-        );
-
-        if (totalRequired == Long.MAX_VALUE) {
-            player.sendSystemMessage(
-                    Component.literal("The calculated purchase cost is too large. Check the server configuration.")
-                            .withStyle(ChatFormatting.RED)
-            );
-            return 0;
-        }
-
         Item requiredItem = itemId == null
                 ? null
                 : BuiltInRegistries.ITEM.getOptional(itemId).orElse(null);
@@ -109,6 +93,68 @@ public class BuyClaimCommand {
             return 0;
         }
 
+        long basePrice = Config.getAmountRequired();
+        double growthFactor = Config.getPriceGrowthFactor();
+        double exponent = Config.getPriceExponent();
+
+        PurchaseLedger ledger;
+        PurchaseLedger.Account account;
+        try {
+            ledger = PurchaseLedger.get(player);
+            account = ledger.getOrCreateAccount(
+                    player.getUUID(),
+                    itemId.toString(),
+                    currentClaims,
+                    basePrice,
+                    growthFactor,
+                    exponent
+            );
+        } catch (RuntimeException exception) {
+            BuyClaimChunks.LOGGER.error(
+                    "Failed to read or initialize the purchase ledger for player {}",
+                    player.getGameProfile().getName(),
+                    exception
+            );
+            player.sendSystemMessage(
+                    Component.literal("The claim purchase ledger is unavailable. No items were consumed.")
+                            .withStyle(ChatFormatting.RED)
+            );
+            return 0;
+        }
+
+        int remainingCapacity = maxClaims - currentClaims;
+        int maximumCompensationClaims = Math.max(0, remainingCapacity - amount);
+        RepricedPurchase quote = PricingCalculator.quoteRepricedPurchase(
+                account.paidClaims(),
+                account.totalSpent(),
+                amount,
+                maximumCompensationClaims,
+                maxClaims,
+                basePrice,
+                growthFactor,
+                exponent
+        );
+
+        if (quote.overflow()) {
+            player.sendSystemMessage(
+                    Component.literal("The calculated purchase cost is too large. Check the server configuration.")
+                            .withStyle(ChatFormatting.RED)
+            );
+            return 0;
+        }
+
+        final int targetClaims;
+        try {
+            targetClaims = Math.addExact(currentClaims, quote.backendIncrease());
+        } catch (ArithmeticException exception) {
+            player.sendSystemMessage(
+                    Component.literal("The resulting claim capacity is too large.")
+                            .withStyle(ChatFormatting.RED)
+            );
+            return 0;
+        }
+
+        long totalRequired = quote.paymentRequired();
         long playerAmount = InventoryPayment.count(player.getInventory(), requiredItem);
         if (playerAmount < totalRequired) {
             String itemDisplay = requiredItem.getName(new ItemStack(requiredItem)).getString();
@@ -122,10 +168,18 @@ public class BuyClaimCommand {
                             .append(Component.literal(" to buy " + amount + " " + chunkText + "!"))
                             .withStyle(ChatFormatting.RED)
             );
+            if (quote.carriedDebt() > 0L) {
+                player.sendSystemMessage(
+                        Component.literal("This price includes ")
+                                .append(Component.literal(String.valueOf(quote.carriedDebt()))
+                                        .withStyle(ChatFormatting.LIGHT_PURPLE))
+                                .append(Component.literal(" carried forward after the server price curve increased."))
+                                .withStyle(ChatFormatting.RED)
+                );
+            }
             return 0;
         }
 
-        int targetClaims = (int) resultingClaims;
         ClaimCapacityUpdate update = backend.setExtraClaims(player, currentClaims, targetClaims);
         if (!update.success()) {
             if (update.status() == ClaimCapacityUpdate.Status.CONCURRENT_CHANGE) {
@@ -150,10 +204,15 @@ public class BuyClaimCommand {
             return 0;
         }
 
-        if (!InventoryPayment.consume(player.getInventory(), requiredItem, totalRequired)) {
+        PurchaseLedger.Account replacement = new PurchaseLedger.Account(
+                account.currencyItemId(),
+                quote.resultingPaidClaims(),
+                quote.resultingTotalSpent()
+        );
+        if (!ledger.compareAndSet(player.getUUID(), account, replacement)) {
             ClaimCapacityUpdate rollback = backend.setExtraClaims(player, targetClaims, currentClaims);
             BuyClaimChunks.LOGGER.error(
-                    "{} increased claim capacity for player {}, but validated payment could not be consumed; rollback status={}, observed={}, detail={}",
+                    "{} increased claim capacity for player {}, but the purchase ledger changed before commit; rollback status={}, observed={}, detail={}",
                     backend.id(),
                     player.getGameProfile().getName(),
                     rollback.status(),
@@ -163,16 +222,50 @@ public class BuyClaimCommand {
             player.sendSystemMessage(
                     Component.literal(
                                     rollback.success()
-                                            ? "Payment could not be completed, so the claim capacity update was rolled back."
-                                            : "Claim capacity was increased, but payment and automatic rollback failed. Contact a server administrator."
+                                            ? "Your purchase history changed during the transaction, so the capacity update was rolled back. No items were consumed."
+                                            : "Your purchase history changed and automatic capacity rollback failed. No items were consumed; contact a server administrator."
                             )
                             .withStyle(ChatFormatting.RED)
             );
             return 0;
         }
 
+        if (!InventoryPayment.consume(player.getInventory(), requiredItem, totalRequired)) {
+            ClaimCapacityUpdate backendRollback = backend.setExtraClaims(player, targetClaims, currentClaims);
+            boolean ledgerRollback = ledger.compareAndSet(player.getUUID(), replacement, account);
+            BuyClaimChunks.LOGGER.error(
+                    "{} increased claim capacity for player {}, but validated payment could not be consumed; backend rollback status={}, observed={}, detail={}; ledger rollback={}",
+                    backend.id(),
+                    player.getGameProfile().getName(),
+                    backendRollback.status(),
+                    backendRollback.observedClaims(),
+                    backendRollback.detail(),
+                    ledgerRollback
+            );
+            player.sendSystemMessage(
+                    Component.literal(
+                                    backendRollback.success() && ledgerRollback
+                                            ? "Payment could not be completed, so the claim capacity and purchase ledger were rolled back."
+                                            : "Claim capacity or the purchase ledger changed, but payment and automatic rollback failed. Contact a server administrator."
+                            )
+                            .withStyle(ChatFormatting.RED)
+            );
+            return 0;
+        }
+
+        if (quote.compensationClaims() > 0) {
+            player.sendSystemMessage(
+                    Component.literal("The updated price curve granted ")
+                            .append(Component.literal(String.valueOf(quote.compensationClaims()))
+                                    .withStyle(ChatFormatting.LIGHT_PURPLE))
+                            .append(Component.literal(" additional claim chunk(s) from your previous payments."))
+                            .withStyle(ChatFormatting.GREEN)
+            );
+        }
         player.sendSystemMessage(
-                Component.literal("You have successfully bought " + amount + " extra claim chunk(s)!")
+                Component.literal("You have successfully bought " + amount + " extra claim chunk(s) for ")
+                        .append(Component.literal(String.valueOf(totalRequired)).withStyle(ChatFormatting.LIGHT_PURPLE))
+                        .append(Component.literal(" item(s)!"))
                         .withStyle(ChatFormatting.GREEN)
         );
         return 1;
