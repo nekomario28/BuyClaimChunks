@@ -115,7 +115,24 @@ public final class BuyClaimChunksRestartIntegrationGameTests {
                         "payment after end-to-end purchase"
                 );
 
-                writeState(expectedBackend, player.getUUID(), 1, 1, 4L, 0L);
+                PurchaseLedger.Account ledgerAccount = PurchaseLedger.get(player)
+                        .getAccountForTests(player.getUUID());
+                helper.assertTrue(ledgerAccount != null, "purchase ledger account must exist");
+                helper.assertValueEqual(ledgerAccount.currencyItemId(), itemId.toString(), "ledger currency item");
+                helper.assertValueEqual(ledgerAccount.paidClaims(), 1, "ledger paid claims after purchase");
+                helper.assertValueEqual(ledgerAccount.totalSpent(), 4L, "ledger total spent after purchase");
+
+                writeState(
+                        expectedBackend,
+                        player.getUUID(),
+                        1,
+                        1,
+                        4L,
+                        0L,
+                        itemId.toString(),
+                        1,
+                        4L
+                );
                 helper.succeed();
             } catch (Exception exception) {
                 BuyClaimChunks.LOGGER.error("Claim purchase seed phase failed", exception);
@@ -137,6 +154,9 @@ public final class BuyClaimChunksRestartIntegrationGameTests {
             UUID playerId = UUID.fromString(requiredProperty(state, "playerUuid"));
             int expectedClaims = Integer.parseInt(requiredProperty(state, "expectedClaims"));
             int expectedFullLimit = Integer.parseInt(requiredProperty(state, "expectedFullLimit"));
+            String expectedCurrencyItem = requiredProperty(state, "ledgerCurrencyItem");
+            int expectedPaidClaims = Integer.parseInt(requiredProperty(state, "ledgerPaidClaims"));
+            long expectedTotalSpent = Long.parseLong(requiredProperty(state, "ledgerTotalSpent"));
 
             helper.assertValueEqual(expectedBackend(), expectedBackend, "restart test backend property");
             helper.assertValueEqual(
@@ -164,6 +184,25 @@ public final class BuyClaimChunksRestartIntegrationGameTests {
                             backend.getFullClaimLimit(player),
                             expectedFullLimit,
                             "full claim limit loaded after restart"
+                    );
+
+                    PurchaseLedger.Account ledgerAccount = PurchaseLedger.get(player)
+                            .getAccountForTests(playerId);
+                    helper.assertTrue(ledgerAccount != null, "purchase ledger must load after restart");
+                    helper.assertValueEqual(
+                            ledgerAccount.currencyItemId(),
+                            expectedCurrencyItem,
+                            "ledger currency loaded after restart"
+                    );
+                    helper.assertValueEqual(
+                            ledgerAccount.paidClaims(),
+                            expectedPaidClaims,
+                            "ledger paid claims loaded after restart"
+                    );
+                    helper.assertValueEqual(
+                            ledgerAccount.totalSpent(),
+                            expectedTotalSpent,
+                            "ledger total spent loaded after restart"
                     );
                     helper.succeed();
                 } catch (Exception exception) {
@@ -254,7 +293,10 @@ public final class BuyClaimChunksRestartIntegrationGameTests {
             int expectedClaims,
             int expectedFullLimit,
             long paymentBefore,
-            long paymentAfter
+            long paymentAfter,
+            String ledgerCurrencyItem,
+            int ledgerPaidClaims,
+            long ledgerTotalSpent
     ) throws IOException {
         Properties state = new Properties();
         state.setProperty("backend", backend);
@@ -263,6 +305,9 @@ public final class BuyClaimChunksRestartIntegrationGameTests {
         state.setProperty("expectedFullLimit", Integer.toString(expectedFullLimit));
         state.setProperty("paymentBefore", Long.toString(paymentBefore));
         state.setProperty("paymentAfter", Long.toString(paymentAfter));
+        state.setProperty("ledgerCurrencyItem", ledgerCurrencyItem);
+        state.setProperty("ledgerPaidClaims", Integer.toString(ledgerPaidClaims));
+        state.setProperty("ledgerTotalSpent", Long.toString(ledgerTotalSpent));
 
         Path path = stateFile();
         Files.createDirectories(path.getParent());
