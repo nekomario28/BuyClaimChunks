@@ -45,7 +45,7 @@ The player keeps both existing claims. The missing 6 diamonds are recovered only
 
 When previous payments buy more claims under the new curve, the difference becomes claim credit.
 
-On the next successful `/buyclaim` transaction, the mod grants as many compensation claims as fit under `maxExtraClaims`, then processes the requested purchase. Credit that cannot fit under the current capacity limit remains represented by the lifetime payment total and can make later claims free or cheaper.
+On the next successful `/buyclaim` transaction, the mod grants compensation claims before the requested purchase. The total number granted by one command, including the requested amount, is bounded by `maxPurchaseAmount`; the backend total is also bounded by `maxExtraClaims`. Credit that cannot be granted in that transaction remains represented by the lifetime payment total and can make later claims free or cheaper.
 
 Example:
 
