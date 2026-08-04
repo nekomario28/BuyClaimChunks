@@ -111,16 +111,18 @@ dependencies {
     compileOnly "dev.ftb.mods:ftb-chunks-neoforge:${ftb_chunks_version}"
     compileOnly "maven.modrinth:gF3BGWvG:${openpac_modrinth_version}"
 
-    // ModDevGradle localRuntime keeps validation installations isolated without
-    // publishing either optional backend as a mandatory Maven dependency.
+    // ModDevGradle 2.0.142 does not create a localRuntime configuration in this
+    // project. runtimeOnly supplies the selected full mods to development runs
+    // without embedding them in the output JAR. This project does not publish a
+    // Maven POM, and the packaged-JAR gate rejects copied backend namespaces.
     if (testBackend == 'ftb' || testBackend == 'both') {
-        localRuntime "dev.architectury:architectury-neoforge:${architectury_version}"
-        localRuntime "dev.ftb.mods:ftb-library-neoforge:${ftb_library_version}"
-        localRuntime "dev.ftb.mods:ftb-teams-neoforge:${ftb_teams_version}"
-        localRuntime "dev.ftb.mods:ftb-chunks-neoforge:${ftb_chunks_version}"
+        runtimeOnly "dev.architectury:architectury-neoforge:${architectury_version}"
+        runtimeOnly "dev.ftb.mods:ftb-library-neoforge:${ftb_library_version}"
+        runtimeOnly "dev.ftb.mods:ftb-teams-neoforge:${ftb_teams_version}"
+        runtimeOnly "dev.ftb.mods:ftb-chunks-neoforge:${ftb_chunks_version}"
     }
     if (testBackend == 'openpac' || testBackend == 'both') {
-        localRuntime "maven.modrinth:gF3BGWvG:${openpac_modrinth_version}"
+        runtimeOnly "maven.modrinth:gF3BGWvG:${openpac_modrinth_version}"
     }
 
     testImplementation platform('org.junit:junit-bom:5.14.2')
