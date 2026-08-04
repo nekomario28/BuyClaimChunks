@@ -76,7 +76,7 @@ public final class PricingCalculator {
 
     /**
      * Finds the largest claim count whose cumulative price does not exceed the
-     * supplied budget. The search is bounded by the configured maximum.
+     * supplied budget. Intended for bounded diagnostics and tests.
      */
     public static int maxAffordableClaims(
             long budget,
@@ -109,7 +109,7 @@ public final class PricingCalculator {
      * <p>If the active curve became more expensive, {@code carriedDebt} is
      * included in the next payment. Existing claims are never removed. If the
      * curve became cheaper, already-spent currency can grant compensation
-     * claims, bounded by {@code maximumCompensationClaims}.</p>
+     * claims, bounded per transaction by {@code maximumCompensationClaims}.</p>
      */
     public static RepricedPurchase quoteRepricedPurchase(
             int paidClaims,
@@ -125,6 +125,9 @@ public final class PricingCalculator {
                 || maximumCompensationClaims < 0 || maximumClaims < 0) {
             throw new IllegalArgumentException("Repricing inputs are outside their supported range");
         }
+        if (paidClaims > maximumClaims || (long) paidClaims + purchaseAmount > maximumClaims) {
+            return RepricedPurchase.overflowResult();
+        }
 
         long currentCurveCost = cumulativePrice(paidClaims, basePrice, growthFactor, exponent);
         if (currentCurveCost == Long.MAX_VALUE) {
@@ -132,15 +135,26 @@ public final class PricingCalculator {
         }
         long carriedDebt = Math.max(0L, currentCurveCost - totalSpent);
 
-        int affordableClaims = maxAffordableClaims(
-                totalSpent,
-                maximumClaims,
-                basePrice,
-                growthFactor,
-                exponent
+        int compensationLimit = Math.min(
+                maximumCompensationClaims,
+                maximumClaims - paidClaims - purchaseAmount
         );
-        int availableCompensation = Math.max(0, affordableClaims - paidClaims);
-        int compensationClaims = Math.min(availableCompensation, maximumCompensationClaims);
+        int compensationClaims = 0;
+        long curveCostAfterCompensation = currentCurveCost;
+        for (int offset = 1; offset <= compensationLimit; offset++) {
+            long claimNumber = (long) paidClaims + offset;
+            long price = priceForClaim(claimNumber, basePrice, growthFactor, exponent);
+            if (price == Long.MAX_VALUE || Long.MAX_VALUE - curveCostAfterCompensation < price) {
+                return RepricedPurchase.overflowResult();
+            }
+
+            long candidateCost = curveCostAfterCompensation + price;
+            if (candidateCost > totalSpent) {
+                break;
+            }
+            curveCostAfterCompensation = candidateCost;
+            compensationClaims++;
+        }
 
         final int resultingPaidClaims;
         try {
@@ -152,15 +166,18 @@ public final class PricingCalculator {
             return RepricedPurchase.overflowResult();
         }
 
-        long targetCurveCost = cumulativePrice(
-                resultingPaidClaims,
+        long requestedPurchaseCost = totalPrice(
+                (long) paidClaims + compensationClaims,
+                purchaseAmount,
                 basePrice,
                 growthFactor,
                 exponent
         );
-        if (targetCurveCost == Long.MAX_VALUE) {
+        if (requestedPurchaseCost == Long.MAX_VALUE
+                || Long.MAX_VALUE - curveCostAfterCompensation < requestedPurchaseCost) {
             return RepricedPurchase.overflowResult();
         }
+        long targetCurveCost = curveCostAfterCompensation + requestedPurchaseCost;
 
         long paymentRequired = Math.max(0L, targetCurveCost - totalSpent);
         final long resultingTotalSpent;
