@@ -66,6 +66,10 @@ jobs:
         if: matrix.backend == 'ftb'
         run: bash scripts/run-ftb-restart-integration.sh
 
+      - name: Run OpenPAC purchase and restart integration
+        if: matrix.backend == 'openpac'
+        run: bash scripts/run-openpac-restart-integration.sh
+
       - name: Smoke test dedicated server
         shell: bash
         run: |
@@ -120,7 +124,9 @@ jobs:
             gametest-${{ matrix.backend }}.log
             integration-seed.log
             integration-verify.log
-            run-integration-ftb/purchase-state.properties
+            openpac-integration-seed.log
+            openpac-integration-verify.log
+            run-integration-${{ matrix.backend }}/purchase-state.properties
             server-smoke-${{ matrix.backend }}.log
           if-no-files-found: error
           retention-days: 14
@@ -135,12 +141,15 @@ jobs:
             gametest-${{ matrix.backend }}.log
             integration-seed.log
             integration-verify.log
+            openpac-integration-seed.log
+            openpac-integration-verify.log
             server-smoke-${{ matrix.backend }}.log
             run/logs/latest.log
             run/crash-reports/
-            run-integration-ftb/purchase-state.properties
-            run-integration-ftb/logs/latest.log
-            run-integration-ftb/crash-reports/
-            run-integration-ftb/**/ftbchunks/**
+            run-integration-${{ matrix.backend }}/purchase-state.properties
+            run-integration-${{ matrix.backend }}/logs/latest.log
+            run-integration-${{ matrix.backend }}/crash-reports/
+            run-integration-${{ matrix.backend }}/**/ftbchunks/**
+            run-integration-${{ matrix.backend }}/**/openpartiesandclaims/**
           if-no-files-found: warn
           retention-days: 14
