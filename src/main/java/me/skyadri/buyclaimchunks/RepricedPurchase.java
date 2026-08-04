@@ -20,7 +20,7 @@ public record RepricedPurchase(
         }
     }
 
-    public static RepricedPurchase overflow() {
+    public static RepricedPurchase overflowResult() {
         return new RepricedPurchase(true, 0, 1, 0, Long.MAX_VALUE, 0L, Long.MAX_VALUE);
     }
 
