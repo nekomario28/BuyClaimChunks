@@ -81,7 +81,7 @@ public final class BuyClaimChunksUnavailableBackendGameTests {
 
     private static ServerPlayer makeConnectedPlayer(GameTestHelper helper, GameType gameType) {
         CommonListenerCookie cookie = CommonListenerCookie.createInitial(
-                new GameProfile(UUID.randomUUID(), "bclaim-unavailable"),
+                new GameProfile(UUID.randomUUID(), "bclaim-unavail"),
                 false
         );
         ServerPlayer player = new ServerPlayer(
