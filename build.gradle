@@ -18,7 +18,7 @@ def backendConfig = [
         ],
         openpac: [
                 dependencyModId: 'openpartiesandclaims',
-                dependencyVersionRange: "[${openpac_version},)",
+                dependencyVersionRange: "[${openpac_version},0.28)",
                 displayName: 'Open Parties and Claims',
                 description: 'Buy personal Open Parties and Claims bonus claim capacity with the same safe transactions and configurable progressive pricing as the FTB build.'
         ]
@@ -42,10 +42,15 @@ repositories {
     maven {
         url = 'https://maven.architectury.dev/'
     }
-    maven {
-        url = 'https://cursemaven.com'
-        content {
-            includeGroup 'curse.maven'
+    exclusiveContent {
+        forRepository {
+            maven {
+                name = 'Modrinth'
+                url = 'https://api.modrinth.com/maven'
+            }
+        }
+        filter {
+            includeGroup 'maven.modrinth'
         }
     }
 }
@@ -122,7 +127,7 @@ dependencies {
         implementation "dev.ftb.mods:ftb-teams-neoforge:${ftb_teams_version}"
         implementation "dev.ftb.mods:ftb-chunks-neoforge:${ftb_chunks_version}"
     } else {
-        implementation "curse.maven:open-parties-and-claims-636608:${openpac_file_id}"
+        implementation "maven.modrinth:gF3BGWvG:${openpac_modrinth_version}"
     }
 
     testImplementation platform('org.junit:junit-bom:5.14.2')
