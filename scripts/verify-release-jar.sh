@@ -38,6 +38,7 @@ required_entries=(
   me/skyadri/buyclaimchunks/BuyClaimCommand.class
   me/skyadri/buyclaimchunks/BuyClaimChunksGameTests.class
   me/skyadri/buyclaimchunks/BuyClaimChunksRestartIntegrationGameTests.class
+  me/skyadri/buyclaimchunks/BuyClaimChunksUnavailableBackendGameTests.class
   me/skyadri/buyclaimchunks/ClaimCapacityBackend.class
   me/skyadri/buyclaimchunks/ClaimCapacityUpdate.class
   me/skyadri/buyclaimchunks/ClaimCapacityBackends.class
