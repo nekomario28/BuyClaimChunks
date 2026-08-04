@@ -16,9 +16,9 @@ permissions:
 
 jobs:
   release:
-    name: Validate and publish both backends
+    name: Validate and publish universal JAR
     runs-on: buyclaimchunks
-    timeout-minutes: 150
+    timeout-minutes: 180
     env:
       RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
 
@@ -51,57 +51,54 @@ jobs:
             exit 1
           fi
 
-      - name: Validate FTB backend
+      - name: Build and verify universal JAR
         shell: bash
         run: |
           set -euo pipefail
           set -o pipefail
           ./gradlew clean test build \
-            -Pclaim_backend=ftb \
-            --no-daemon --stacktrace 2>&1 | tee release-build-ftb.log
-          bash scripts/verify-release-jar.sh ftb > ftb-jar-path.txt
-          ./gradlew runGameTestServer \
-            -Pclaim_backend=ftb \
-            --no-daemon --console=plain 2>&1 | tee release-gametest-ftb.log
-          bash scripts/run-ftb-restart-integration.sh
-          bash scripts/run-backend-server-smoke.sh ftb
+            -Ptest_backend=none \
+            --no-daemon --stacktrace 2>&1 | tee release-build-universal.log
+          bash scripts/verify-release-jar.sh > release-jar-path.txt
 
-      - name: Preserve FTB release artifact
+      - name: Validate FTB Chunks backend
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p release-dist
-          ftb_jar=$(cat ftb-jar-path.txt)
-          cp "$ftb_jar" release-dist/
+          set -o pipefail
+          ./gradlew runGameTestServer \
+            -Ptest_backend=ftb \
+            --no-daemon --console=plain 2>&1 | tee release-gametest-ftb.log
+          bash scripts/run-ftb-restart-integration.sh
+          bash scripts/run-backend-server-smoke.sh ftb
 
       - name: Validate OpenPAC backend
         shell: bash
         run: |
           set -euo pipefail
           set -o pipefail
-          ./gradlew clean test build \
-            -Pclaim_backend=openpac \
-            --no-daemon --stacktrace 2>&1 | tee release-build-openpac.log
-          bash scripts/verify-release-jar.sh openpac > openpac-jar-path.txt
           ./gradlew runGameTestServer \
-            -Pclaim_backend=openpac \
+            -Ptest_backend=openpac \
             --no-daemon --console=plain 2>&1 | tee release-gametest-openpac.log
           bash scripts/run-openpac-restart-integration.sh
           bash scripts/run-backend-server-smoke.sh openpac
+
+      - name: Validate fail-closed configurations
+        run: |
+          bash scripts/run-backend-server-smoke.sh none
+          bash scripts/run-backend-server-smoke.sh both
 
       - name: Prepare release files and notes
         shell: bash
         run: |
           set -euo pipefail
-          openpac_jar=$(cat openpac-jar-path.txt)
-          cp "$openpac_jar" release-dist/
-
-          for jar_file in release-dist/*.jar; do
-            (
-              cd release-dist
-              sha256sum "$(basename "$jar_file")"
-            ) > "${jar_file}.sha256"
-          done
+          mkdir -p release-dist
+          jar_file=$(cat release-jar-path.txt)
+          cp "$jar_file" release-dist/
+          (
+            cd release-dist
+            sha256sum "$(basename "$jar_file")"
+          ) > "release-dist/$(basename "$jar_file").sha256"
 
           mod_version=$(sed -n 's/^mod_version=//p' gradle.properties)
           awk -v version="$mod_version" '
@@ -136,8 +133,7 @@ jobs:
           path: |
             release-dist/
             release-notes.md
-            release-build-ftb.log
-            release-build-openpac.log
+            release-build-universal.log
             release-gametest-ftb.log
             release-gametest-openpac.log
             integration-seed.log
@@ -146,6 +142,8 @@ jobs:
             openpac-integration-verify.log
             server-smoke-ftb.log
             server-smoke-openpac.log
+            server-smoke-none.log
+            server-smoke-both.log
             run-integration-ftb/purchase-state.properties
             run-integration-ftb/logs/latest.log
             run-integration-ftb/**/ftbchunks/**
