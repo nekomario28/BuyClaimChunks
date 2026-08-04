@@ -18,7 +18,7 @@ jobs:
   release:
     name: Validate and publish universal JAR
     runs-on: buyclaimchunks
-    timeout-minutes: 180
+    timeout-minutes: 210
     env:
       RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
 
@@ -83,9 +83,24 @@ jobs:
           bash scripts/run-openpac-restart-integration.sh
           bash scripts/run-backend-server-smoke.sh openpac
 
-      - name: Validate fail-closed configurations
+      - name: Validate no-backend fail-closed transaction
+        shell: bash
         run: |
+          set -euo pipefail
+          set -o pipefail
+          ./gradlew runGameTestServer \
+            -Ptest_backend=none \
+            --no-daemon --console=plain 2>&1 | tee release-gametest-none.log
           bash scripts/run-backend-server-smoke.sh none
+
+      - name: Validate dual-backend fail-closed transaction
+        shell: bash
+        run: |
+          set -euo pipefail
+          set -o pipefail
+          ./gradlew runGameTestServer \
+            -Ptest_backend=both \
+            --no-daemon --console=plain 2>&1 | tee release-gametest-both.log
           bash scripts/run-backend-server-smoke.sh both
 
       - name: Prepare release files and notes
@@ -136,6 +151,8 @@ jobs:
             release-build-universal.log
             release-gametest-ftb.log
             release-gametest-openpac.log
+            release-gametest-none.log
+            release-gametest-both.log
             integration-seed.log
             integration-verify.log
             openpac-integration-seed.log
