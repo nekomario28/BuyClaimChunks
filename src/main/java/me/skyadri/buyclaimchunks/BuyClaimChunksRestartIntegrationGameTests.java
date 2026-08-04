@@ -1,9 +1,6 @@
 package me.skyadri.buyclaimchunks;
 
 import com.mojang.authlib.GameProfile;
-import com.mojang.brigadier.exceptions.CommandSyntaxException;
-import dev.ftb.mods.ftbchunks.api.ChunkTeamData;
-import dev.ftb.mods.ftbchunks.api.FTBChunksAPI;
 import io.netty.channel.embedded.EmbeddedChannel;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.gametest.framework.GameTest;
@@ -37,6 +34,7 @@ import java.util.UUID;
 @GameTestHolder(BuyClaimChunks.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class BuyClaimChunksRestartIntegrationGameTests {
+    private static final String EXPECTED_BACKEND_PROPERTY = "buyclaimchunks.expectedBackend";
     private static final String PHASE_PROPERTY = "buyclaimchunks.integrationPhase";
     private static final String STATE_FILE_PROPERTY = "buyclaimchunks.integrationStateFile";
     private static final String SEED_PHASE = "seed";
@@ -46,16 +44,16 @@ public final class BuyClaimChunksRestartIntegrationGameTests {
     }
 
     @GameTest(template = "empty", timeoutTicks = 200)
-    public static void purchaseUpdatesQuotaAndConsumesPayment(GameTestHelper helper) {
+    public static void purchaseUpdatesCapacityAndConsumesPayment(GameTestHelper helper) {
         if (!isPhase(SEED_PHASE)) {
             helper.succeed();
             return;
         }
 
-        ServerPlayer player;
+        final ServerPlayer player;
         try {
-            player = makeConnectedPlayer(helper, GameType.SURVIVAL);
-        } catch (Exception exception) {
+            player = makeConnectedPlayer(helper, GameType.SURVIVAL, UUID.randomUUID(), "bclaim-test");
+        } catch (RuntimeException exception) {
             BuyClaimChunks.LOGGER.error("Failed to create connected GameTest player", exception);
             helper.fail("Failed to create connected GameTest player: " + exception.getMessage());
             return;
@@ -64,18 +62,19 @@ public final class BuyClaimChunksRestartIntegrationGameTests {
         helper.runAfterDelay(5, () -> {
             try {
                 var server = helper.getLevel().getServer();
-                String playerName = player.getGameProfile().getName();
+                ClaimCapacityBackend backend = BuyClaimChunks.getClaimBackend();
+                String expectedBackend = expectedBackend();
 
-                executeAdminCommand(
-                        server.getCommands().getDispatcher(),
-                        server.createCommandSourceStack().withPermission(4).withSuppressedOutput(),
-                        "ftbchunks admin extra_claim_chunks " + playerName + " set 0"
-                );
-                helper.assertValueEqual(
-                        BuyClaimChunks.getClaimBackend().getExtraClaims(player),
-                        0,
-                        "personal extra claims before purchase"
-                );
+                helper.assertValueEqual(backend.id(), expectedBackend, "selected claim backend");
+
+                int observed = backend.getExtraClaims(player);
+                if (observed != 0) {
+                    ClaimCapacityUpdate reset = backend.setExtraClaims(player, observed, 0);
+                    helper.assertTrue(reset.success(), "Backend capacity reset must succeed: " + reset.detail());
+                }
+
+                helper.assertValueEqual(backend.getExtraClaims(player), 0, "extra claims before purchase");
+                helper.assertValueEqual(backend.getFullClaimLimit(player), 0, "full claim limit before purchase");
 
                 ResourceLocation itemId = Config.getItemRequired();
                 Item requiredItem = itemId == null
@@ -108,28 +107,25 @@ public final class BuyClaimChunksRestartIntegrationGameTests {
                 );
 
                 helper.assertValueEqual(commandResult, 1, "/buyclaim command result");
-                helper.assertValueEqual(
-                        BuyClaimChunks.getClaimBackend().getExtraClaims(player),
-                        1,
-                        "personal extra claims after purchase"
-                );
+                helper.assertValueEqual(backend.getExtraClaims(player), 1, "extra claims after purchase");
+                helper.assertValueEqual(backend.getFullClaimLimit(player), 1, "full claim limit after purchase");
                 helper.assertValueEqual(
                         InventoryPayment.count(player.getInventory(), requiredItem),
                         0L,
                         "payment after end-to-end purchase"
                 );
 
-                writeState(player.getUUID(), 1, 4L, 0L);
+                writeState(expectedBackend, player.getUUID(), 1, 1, 4L, 0L);
                 helper.succeed();
             } catch (Exception exception) {
-                BuyClaimChunks.LOGGER.error("FTB Chunks purchase seed phase failed", exception);
-                helper.fail("FTB Chunks purchase seed phase failed: " + exception.getMessage());
+                BuyClaimChunks.LOGGER.error("Claim purchase seed phase failed", exception);
+                helper.fail("Claim purchase seed phase failed: " + exception.getMessage());
             }
         });
     }
 
     @GameTest(template = "empty", timeoutTicks = 200)
-    public static void personalQuotaSurvivesServerRestart(GameTestHelper helper) {
+    public static void capacitySurvivesServerRestart(GameTestHelper helper) {
         if (!isPhase(VERIFY_PHASE)) {
             helper.succeed();
             return;
@@ -137,9 +133,12 @@ public final class BuyClaimChunksRestartIntegrationGameTests {
 
         try {
             Properties state = readState();
+            String expectedBackend = requiredProperty(state, "backend");
             UUID playerId = UUID.fromString(requiredProperty(state, "playerUuid"));
             int expectedClaims = Integer.parseInt(requiredProperty(state, "expectedClaims"));
+            int expectedFullLimit = Integer.parseInt(requiredProperty(state, "expectedFullLimit"));
 
+            helper.assertValueEqual(expectedBackend(), expectedBackend, "restart test backend property");
             helper.assertValueEqual(
                     Long.parseLong(requiredProperty(state, "paymentBefore")),
                     4L,
@@ -151,23 +150,41 @@ public final class BuyClaimChunksRestartIntegrationGameTests {
                     "recorded payment after seed purchase"
             );
 
-            ChunkTeamData personalData = FTBChunksAPI.api().getManager().getPersonalData(playerId);
-            helper.assertTrue(personalData != null, "FTB Chunks personal data must load after restart");
-            helper.assertValueEqual(
-                    personalData.getExtraClaimChunks(),
-                    expectedClaims,
-                    "personal extra claims loaded after restart"
-            );
-            helper.succeed();
+            ServerPlayer player = makeConnectedPlayer(helper, GameType.SURVIVAL, playerId, "bclaim-reload");
+            helper.runAfterDelay(5, () -> {
+                try {
+                    ClaimCapacityBackend backend = BuyClaimChunks.getClaimBackend();
+                    helper.assertValueEqual(backend.id(), expectedBackend, "selected backend after restart");
+                    helper.assertValueEqual(
+                            backend.getExtraClaims(player),
+                            expectedClaims,
+                            "extra claims loaded after restart"
+                    );
+                    helper.assertValueEqual(
+                            backend.getFullClaimLimit(player),
+                            expectedFullLimit,
+                            "full claim limit loaded after restart"
+                    );
+                    helper.succeed();
+                } catch (Exception exception) {
+                    BuyClaimChunks.LOGGER.error("Claim restart verification phase failed", exception);
+                    helper.fail("Claim restart verification phase failed: " + exception.getMessage());
+                }
+            });
         } catch (Exception exception) {
-            BuyClaimChunks.LOGGER.error("FTB Chunks restart verification phase failed", exception);
-            helper.fail("FTB Chunks restart verification phase failed: " + exception.getMessage());
+            BuyClaimChunks.LOGGER.error("Failed to prepare restart verification phase", exception);
+            helper.fail("Failed to prepare restart verification phase: " + exception.getMessage());
         }
     }
 
-    private static ServerPlayer makeConnectedPlayer(GameTestHelper helper, GameType gameType) {
+    private static ServerPlayer makeConnectedPlayer(
+            GameTestHelper helper,
+            GameType gameType,
+            UUID playerId,
+            String playerName
+    ) {
         CommonListenerCookie cookie = CommonListenerCookie.createInitial(
-                new GameProfile(UUID.randomUUID(), "bclaim-test"),
+                new GameProfile(playerId, playerName),
                 false
         );
         ServerPlayer player = new ServerPlayer(
@@ -211,12 +228,12 @@ public final class BuyClaimChunksRestartIntegrationGameTests {
         return player;
     }
 
-    private static int executeAdminCommand(
-            com.mojang.brigadier.CommandDispatcher<net.minecraft.commands.CommandSourceStack> dispatcher,
-            net.minecraft.commands.CommandSourceStack source,
-            String command
-    ) throws CommandSyntaxException {
-        return dispatcher.execute(command, source);
+    private static String expectedBackend() {
+        String backend = System.getProperty(EXPECTED_BACKEND_PROPERTY, "");
+        if (!backend.equals("ftb") && !backend.equals("openpac")) {
+            throw new IllegalStateException("Expected test backend must be ftb or openpac, got: " + backend);
+        }
+        return backend;
     }
 
     private static boolean isPhase(String expected) {
@@ -231,11 +248,19 @@ public final class BuyClaimChunksRestartIntegrationGameTests {
         return Path.of(configured);
     }
 
-    private static void writeState(UUID playerId, int expectedClaims, long paymentBefore, long paymentAfter)
-            throws IOException {
+    private static void writeState(
+            String backend,
+            UUID playerId,
+            int expectedClaims,
+            int expectedFullLimit,
+            long paymentBefore,
+            long paymentAfter
+    ) throws IOException {
         Properties state = new Properties();
+        state.setProperty("backend", backend);
         state.setProperty("playerUuid", playerId.toString());
         state.setProperty("expectedClaims", Integer.toString(expectedClaims));
+        state.setProperty("expectedFullLimit", Integer.toString(expectedFullLimit));
         state.setProperty("paymentBefore", Long.toString(paymentBefore));
         state.setProperty("paymentAfter", Long.toString(paymentAfter));
 
