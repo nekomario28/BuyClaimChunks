@@ -66,15 +66,16 @@ public final class BuyClaimChunksRestartIntegrationGameTests {
                 var server = helper.getLevel().getServer();
                 String playerName = player.getGameProfile().getName();
 
-                // Reset the isolated integration player's FTB Chunks personal quota.
-                // FTB Chunks returns the resulting quota as the command result, so a
-                // successful reset to zero legitimately returns zero.
                 executeAdminCommand(
                         server.getCommands().getDispatcher(),
                         server.createCommandSourceStack().withPermission(4).withSuppressedOutput(),
                         "ftbchunks admin extra_claim_chunks " + playerName + " set 0"
                 );
-                helper.assertValueEqual(ClaimHelper.getExtraClaims(player), 0, "personal extra claims before purchase");
+                helper.assertValueEqual(
+                        BuyClaimChunks.getClaimBackend().getExtraClaims(player),
+                        0,
+                        "personal extra claims before purchase"
+                );
 
                 ResourceLocation itemId = Config.getItemRequired();
                 Item requiredItem = itemId == null
@@ -107,7 +108,11 @@ public final class BuyClaimChunksRestartIntegrationGameTests {
                 );
 
                 helper.assertValueEqual(commandResult, 1, "/buyclaim command result");
-                helper.assertValueEqual(ClaimHelper.getExtraClaims(player), 1, "personal extra claims after purchase");
+                helper.assertValueEqual(
+                        BuyClaimChunks.getClaimBackend().getExtraClaims(player),
+                        1,
+                        "personal extra claims after purchase"
+                );
                 helper.assertValueEqual(
                         InventoryPayment.count(player.getInventory(), requiredItem),
                         0L,
@@ -115,10 +120,6 @@ public final class BuyClaimChunksRestartIntegrationGameTests {
                 );
 
                 writeState(player.getUUID(), 1, 4L, 0L);
-
-                // Keep the player connected until the GameTest server performs its
-                // normal shutdown. This deliberately exercises FTB Teams/Chunks'
-                // ordinary save lifecycle rather than invoking a test-only save.
                 helper.succeed();
             } catch (Exception exception) {
                 BuyClaimChunks.LOGGER.error("FTB Chunks purchase seed phase failed", exception);
@@ -164,13 +165,6 @@ public final class BuyClaimChunksRestartIntegrationGameTests {
         }
     }
 
-    /**
-     * Creates a connected in-memory server player and registers it in PlayerList,
-     * so Brigadier player arguments and FTB Teams login hooks observe the same
-     * lifecycle as a real online player. This uses only Minecraft and NeoForge
-     * runtime classes, so the release JAR does not depend on the optional
-     * NeoForge test framework mod.
-     */
     private static ServerPlayer makeConnectedPlayer(GameTestHelper helper, GameType gameType) {
         CommonListenerCookie cookie = CommonListenerCookie.createInitial(
                 new GameProfile(UUID.randomUUID(), "bclaim-test"),
