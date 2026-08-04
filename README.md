@@ -33,13 +33,16 @@ The same command, configuration, price curve, limits, inventory behavior, and tr
 - `/buyclaim <amount>` purchases multiple sequentially priced slots.
 - Any registered item can be used as currency.
 - Fixed or progressive pricing.
+- Later curve changes are reconciled from server-recorded lifetime payment totals.
+- Price increases never remove claims; the shortfall is carried into the next purchase.
+- Price decreases grant compensation capacity supported by previous payments.
 - Separate total-cap and per-command limits.
 - Payment is counted across the hotbar and normal 36-slot inventory.
 - Armor and offhand slots are excluded.
-- Capacity is updated and verified before payment is consumed.
+- Capacity and the purchase ledger are updated and verified before payment is consumed.
 - Concurrent administrator changes are detected instead of overwritten.
-- An unexpected payment failure triggers a verified capacity rollback.
-- The selected claim mod remains the source of truth; no second quota database is created.
+- An unexpected payment failure triggers verified backend and ledger rollback.
+- The selected claim mod remains the source of truth for current capacity.
 
 The mod increases **capacity only**. It does not automatically claim the current chunk, sell force-loaded chunks, charge upkeep, or refund unclaims.
 
@@ -105,7 +108,7 @@ maxPurchaseAmount = 100
 | `amountRequired` | `4` | Price of the first slot and minimum per-slot price. |
 | `priceGrowthFactor` | `3.45` | Strength of progressive price growth. Set to `0` for a fixed price. |
 | `priceExponent` | `0.5` | Shape of the curve. `0.5` is square-root growth; `0` also gives a fixed price. |
-| `maxExtraClaims` | `100` | Maximum backend-owned personal extra capacity. Administrator-granted extras count too. |
+| `maxExtraClaims` | `100` | Maximum backend-owned personal extra capacity. Administrator-granted extras count toward this cap. |
 | `maxPurchaseAmount` | `100` | Maximum amount accepted by one command. |
 
 Existing configuration files are not overwritten. An older installation may still contain `amountRequired = 1`; change it manually or regenerate the file to use the current default curve.
@@ -173,10 +176,28 @@ round(4 + 3.45 * (sqrt(n) - 1))
 
 Bulk purchases sum the next slots individually:
 
-- At 0 extra capacity, `/buyclaim 5` costs `4 + 5 + 7 + 7 + 8 = 31` items.
-- At 8 extra capacity, `/buyclaim 3` costs slots 9–11: `11 + 11 + 12 = 34` items.
+- At 0 paid capacity, `/buyclaim 5` costs `4 + 5 + 7 + 7 + 8 = 31` items.
+- At 8 paid capacity, `/buyclaim 3` costs slots 9–11: `11 + 11 + 12 = 34` items.
 
-Pricing uses the capacity currently reported by the selected backend, including capacity granted by an administrator.
+Pricing position uses the BuyClaimChunks purchase ledger, not administrator-granted capacity. Administrator grants still count toward `maxExtraClaims` because they consume usable backend capacity.
+
+## Changing the curve after players have purchased claims
+
+The server records, per player UUID, the configured currency ID, the number of claims bought through this mod, and the lifetime amount actually consumed.
+
+After a price increase, existing claims are never removed. The next purchase includes the difference between the new cumulative curve and the amount previously paid:
+
+```text
+next payment
+= new cumulative cost through the paid claims after this purchase
+- lifetime consumed amount
+```
+
+After a price decrease, previous payments may support additional claims. On the next successful purchase, compensation claims are granted within `maxExtraClaims`, and any remaining credit continues to reduce later prices.
+
+Changing `itemRequired` starts a new baseline because different items have no automatic exchange rate. Changing only the numeric curve values preserves exact debt or credit.
+
+See [`docs/repricing-ledger.md`](docs/repricing-ledger.md) for examples, legacy-world behavior, and transaction details.
 
 ## Backend behavior
 
@@ -217,17 +238,17 @@ See [`docs/openpac-setup.md`](docs/openpac-setup.md) for migration and troublesh
 
 A purchase runs in this order:
 
-1. Read current backend capacity.
+1. Read current backend capacity and the purchase ledger.
 2. Validate the amount, total cap, and overflow limits.
-3. Calculate every slot in the batch.
+3. Calculate carried price debt or compensation credit and the requested batch.
 4. Validate and count the payment item.
-5. Re-read capacity to detect concurrent changes.
-6. Update and verify backend capacity.
+5. Update and verify backend capacity using compare-before-write semantics.
+6. Compare-and-set the purchase ledger to the quoted result.
 7. Consume payment.
-8. If payment unexpectedly fails, attempt to restore the previous capacity.
-9. Send success only after both capacity and payment are confirmed.
+8. If payment unexpectedly fails, restore both backend capacity and the ledger.
+9. Send success only after capacity, ledger, and payment are confirmed.
 
-A rejected capacity update consumes no items.
+A rejected transaction consumes no items.
 
 ## Universal-JAR selection rules
 
