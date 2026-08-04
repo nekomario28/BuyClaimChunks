@@ -1,12 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-backend=${1:-${CLAIM_BACKEND:-ftb}}
-if [[ "$backend" != "ftb" && "$backend" != "openpac" ]]; then
-  printf 'Unsupported backend: %s\n' "$backend" >&2
-  exit 1
-fi
-
 shopt -s nullglob
 all_jars=(build/libs/*.jar)
 release_jars=()
@@ -22,14 +16,14 @@ for candidate in "${all_jars[@]}"; do
 done
 
 if [[ ${#release_jars[@]} -ne 1 ]]; then
-  printf 'Expected exactly one release JAR in build/libs, found %d.\n' "${#release_jars[@]}" >&2
+  printf 'Expected exactly one universal release JAR in build/libs, found %d.\n' "${#release_jars[@]}" >&2
   printf 'Candidates: %s\n' "${release_jars[*]:-none}" >&2
   exit 1
 fi
 
 jar_file=${release_jars[0]}
-if [[ $(basename "$jar_file") != *"-${backend}-neoforge-"* ]]; then
-  printf 'Release JAR name does not identify backend %s: %s\n' "$backend" "$jar_file" >&2
+if [[ $(basename "$jar_file") != buyclaimchunks-continued-neoforge-* ]]; then
+  printf 'Unexpected universal release JAR name: %s\n' "$jar_file" >&2
   exit 1
 fi
 
@@ -39,72 +33,60 @@ required_entries=(
   buyclaimchunks_continued.png
   LICENSE
   NOTICE
+  THIRD_PARTY_NOTICES.md
   me/skyadri/buyclaimchunks/BuyClaimChunks.class
   me/skyadri/buyclaimchunks/BuyClaimCommand.class
   me/skyadri/buyclaimchunks/BuyClaimChunksGameTests.class
+  me/skyadri/buyclaimchunks/BuyClaimChunksRestartIntegrationGameTests.class
   me/skyadri/buyclaimchunks/ClaimCapacityBackend.class
   me/skyadri/buyclaimchunks/ClaimCapacityUpdate.class
   me/skyadri/buyclaimchunks/ClaimCapacityBackends.class
+  me/skyadri/buyclaimchunks/UnavailableClaimCapacityBackend.class
+  me/skyadri/buyclaimchunks/FtbClaimCapacityBackend.class
+  me/skyadri/buyclaimchunks/OpenPacClaimCapacityBackend.class
   data/buyclaimchunks/structure/empty.nbt
 )
 
 for required in "${required_entries[@]}"; do
   if ! grep -Fxq "$required" <<<"$entries"; then
-    printf 'Release JAR is missing required entry: %s\n' "$required" >&2
+    printf 'Universal release JAR is missing required entry: %s\n' "$required" >&2
     exit 1
   fi
 done
 
-metadata=$(unzip -p "$jar_file" META-INF/neoforge.mods.toml)
-manifest=$(unzip -p "$jar_file" META-INF/MANIFEST.MF)
-
-if ! grep -Fq "BuyClaimChunks-Backend: ${backend}" <<<"$manifest"; then
-  printf 'Release JAR manifest does not identify backend %s.\n' "$backend" >&2
+if grep -Fq 'BuyClaimChunksOpenPacRestartIntegrationGameTests.class' <<<"$entries"; then
+  printf 'Universal release JAR contains the removed backend-specific OpenPAC integration test.\n' >&2
   exit 1
 fi
 
-if [[ "$backend" == "ftb" ]]; then
-  grep -Fxq 'me/skyadri/buyclaimchunks/FtbClaimCapacityBackend.class' <<<"$entries" || {
-    printf 'FTB release JAR is missing FtbClaimCapacityBackend.\n' >&2
+metadata=$(unzip -p "$jar_file" META-INF/neoforge.mods.toml)
+manifest=$(unzip -p "$jar_file" META-INF/MANIFEST.MF)
+
+if ! grep -Fq 'BuyClaimChunks-Backends: ftbchunks,openpartiesandclaims' <<<"$manifest"; then
+  printf 'Universal release JAR manifest does not identify both supported backends.\n' >&2
+  exit 1
+fi
+
+for backend_mod in ftbchunks openpartiesandclaims; do
+  grep -Fq "modId=\"${backend_mod}\"" <<<"$metadata" || {
+    printf 'Universal metadata does not mention optional backend %s.\n' "$backend_mod" >&2
     exit 1
   }
-  grep -Fxq 'me/skyadri/buyclaimchunks/BuyClaimChunksRestartIntegrationGameTests.class' <<<"$entries" || {
-    printf 'FTB release JAR is missing restart integration coverage.\n' >&2
-    exit 1
-  }
-  if grep -Fq 'OpenPacClaimCapacityBackend.class' <<<"$entries"; then
-    printf 'FTB release JAR unexpectedly contains the OpenPAC backend.\n' >&2
-    exit 1
-  fi
-  if grep -Fq 'BuyClaimChunksOpenPacRestartIntegrationGameTests.class' <<<"$entries"; then
-    printf 'FTB release JAR unexpectedly contains OpenPAC integration tests.\n' >&2
-    exit 1
-  fi
-  grep -Fq 'modId="ftbchunks"' <<<"$metadata" || {
-    printf 'FTB release metadata does not require FTB Chunks.\n' >&2
-    exit 1
-  }
-else
-  grep -Fxq 'me/skyadri/buyclaimchunks/OpenPacClaimCapacityBackend.class' <<<"$entries" || {
-    printf 'OpenPAC release JAR is missing OpenPacClaimCapacityBackend.\n' >&2
-    exit 1
-  }
-  grep -Fxq 'me/skyadri/buyclaimchunks/BuyClaimChunksOpenPacRestartIntegrationGameTests.class' <<<"$entries" || {
-    printf 'OpenPAC release JAR is missing restart integration coverage.\n' >&2
-    exit 1
-  }
-  if grep -Fq 'FtbClaimCapacityBackend.class' <<<"$entries"; then
-    printf 'OpenPAC release JAR unexpectedly contains the FTB backend.\n' >&2
-    exit 1
-  fi
-  if grep -Fq 'BuyClaimChunksRestartIntegrationGameTests.class' <<<"$entries"; then
-    printf 'OpenPAC release JAR unexpectedly contains the FTB restart integration class.\n' >&2
-    exit 1
-  fi
-  grep -Fq 'modId="openpartiesandclaims"' <<<"$metadata" || {
-    printf 'OpenPAC release metadata does not require Open Parties and Claims.\n' >&2
-    exit 1
-  }
+done
+
+optional_count=$(grep -c 'type="optional"' <<<"$metadata")
+if [[ "$optional_count" -ne 2 ]]; then
+  printf 'Expected exactly two optional backend dependencies, found %s.\n' "$optional_count" >&2
+  exit 1
+fi
+
+if grep -A5 'modId="ftbchunks"' <<<"$metadata" | grep -Fq 'type="required"'; then
+  printf 'FTB Chunks must not be mandatory in the universal metadata.\n' >&2
+  exit 1
+fi
+if grep -A5 'modId="openpartiesandclaims"' <<<"$metadata" | grep -Fq 'type="required"'; then
+  printf 'OpenPAC must not be mandatory in the universal metadata.\n' >&2
+  exit 1
 fi
 
 mod_version=$(sed -n 's/^mod_version=//p' gradle.properties)
@@ -118,5 +100,5 @@ if ! grep -Fq "authors=\"${mod_authors}\"" <<<"$metadata"; then
   exit 1
 fi
 
-printf 'Verified %s backend release JAR: %s\n' "$backend" "$jar_file" >&2
+printf 'Verified universal FTB Chunks/OpenPAC release JAR: %s\n' "$jar_file" >&2
 printf '%s\n' "$jar_file"
