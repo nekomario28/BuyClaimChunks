@@ -59,6 +59,15 @@ if grep -Fq 'BuyClaimChunksOpenPacRestartIntegrationGameTests.class' <<<"$entrie
   exit 1
 fi
 
+# The adapters may reference external APIs, but no external backend classes or
+# resources may be copied into this MIT-licensed artifact.
+for forbidden_prefix in 'dev/ftb/' 'xaero/pac/'; do
+  if grep -Fq "$forbidden_prefix" <<<"$entries"; then
+    printf 'Universal release JAR unexpectedly bundles external backend content under %s.\n' "$forbidden_prefix" >&2
+    exit 1
+  fi
+done
+
 metadata=$(unzip -p "$jar_file" META-INF/neoforge.mods.toml)
 manifest=$(unzip -p "$jar_file" META-INF/MANIFEST.MF)
 
