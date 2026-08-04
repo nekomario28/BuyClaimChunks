@@ -76,6 +76,10 @@ if [[ "$backend" == "ftb" ]]; then
     printf 'FTB release JAR unexpectedly contains the OpenPAC backend.\n' >&2
     exit 1
   fi
+  if grep -Fq 'BuyClaimChunksOpenPacRestartIntegrationGameTests.class' <<<"$entries"; then
+    printf 'FTB release JAR unexpectedly contains OpenPAC integration tests.\n' >&2
+    exit 1
+  fi
   grep -Fq 'modId="ftbchunks"' <<<"$metadata" || {
     printf 'FTB release metadata does not require FTB Chunks.\n' >&2
     exit 1
@@ -83,6 +87,10 @@ if [[ "$backend" == "ftb" ]]; then
 else
   grep -Fxq 'me/skyadri/buyclaimchunks/OpenPacClaimCapacityBackend.class' <<<"$entries" || {
     printf 'OpenPAC release JAR is missing OpenPacClaimCapacityBackend.\n' >&2
+    exit 1
+  }
+  grep -Fxq 'me/skyadri/buyclaimchunks/BuyClaimChunksOpenPacRestartIntegrationGameTests.class' <<<"$entries" || {
+    printf 'OpenPAC release JAR is missing restart integration coverage.\n' >&2
     exit 1
   }
   if grep -Fq 'FtbClaimCapacityBackend.class' <<<"$entries"; then
