@@ -3,8 +3,12 @@ package me.skyadri.buyclaimchunks;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import xaero.pac.common.server.api.OpenPACServerAPI;
+import xaero.pac.common.server.config.ServerConfig;
+import xaero.pac.common.server.parties.party.api.IServerPartyAPI;
 import xaero.pac.common.server.player.config.api.v2.IPlayerConfigAPI;
 import xaero.pac.common.server.player.config.api.v2.PlayerConfigOptions;
+
+import java.util.UUID;
 
 final class OpenPacClaimCapacityBackend implements ClaimCapacityBackend {
     @Override
@@ -37,6 +41,52 @@ final class OpenPacClaimCapacityBackend implements ClaimCapacityBackend {
                 api.getServerClaimsManager().getPlayerBaseClaimLimit(player),
                 getExtraClaims(player)
         );
+    }
+
+    @Override
+    public ClaimCapacityContext getCapacityContext(ServerPlayer player) {
+        UUID playerId = player.getUUID();
+        MinecraftServer server = player.getServer();
+        if (server == null) {
+            return ClaimCapacityContext.unknown(playerId);
+        }
+
+        try {
+            // OpenPAC's party-owned claiming mode does not create a separate
+            // party quota. PARTY claims are forced to the primary party owner's
+            // player UUID. A regular member's BONUS_CHUNK_CLAIMS therefore
+            // remains their personal PLAYER-mode pool.
+            if (!ServerConfig.CONFIG.partyOwnedClaims.get()) {
+                return ClaimCapacityContext.personal(playerId);
+            }
+
+            IServerPartyAPI party = OpenPACServerAPI.get(server)
+                    .getPartyManager()
+                    .getPartyByMember(playerId);
+            if (party == null) {
+                return ClaimCapacityContext.personal(playerId);
+            }
+
+            UUID ownerId = party.getOwner().getUUID();
+            String ownerName = party.getOwner().getUsername();
+            if (ownerId.equals(playerId)) {
+                return ClaimCapacityContext.ownerShared(playerId, party.getId(), ownerName);
+            }
+
+            return ClaimCapacityContext.memberPersonal(
+                    playerId,
+                    party.getId(),
+                    ownerId,
+                    ownerName
+            );
+        } catch (RuntimeException exception) {
+            BuyClaimChunks.LOGGER.warn(
+                    "Could not determine OpenPAC party ownership context for player {}. Purchases will remain bound to the player's own UUID.",
+                    player.getGameProfile().getName(),
+                    exception
+            );
+            return ClaimCapacityContext.unknown(playerId);
+        }
     }
 
     @Override
@@ -103,10 +153,12 @@ final class OpenPacClaimCapacityBackend implements ClaimCapacityBackend {
             }
 
             if (baseAfter != 0) {
+                ClaimCapacityContext context = getCapacityContext(player);
                 BuyClaimChunks.LOGGER.warn(
-                        "OpenPAC base claim limit for player {} is {}. The all-paid claim model requires a base limit of 0.",
+                        "OpenPAC base claim limit for player {} is {} (context={}). The all-paid claim model requires a base limit of 0.",
                         player.getGameProfile().getName(),
-                        baseAfter
+                        baseAfter,
+                        context.kind()
                 );
             }
 
