@@ -277,7 +277,42 @@ public class BuyClaimCommand {
                         .append(Component.literal(" item(s)!"))
                         .withStyle(ChatFormatting.GREEN)
         );
+        sendCapacityContextNotice(player, backend);
         return 1;
+    }
+
+    private static void sendCapacityContextNotice(ServerPlayer player, ClaimCapacityBackend backend) {
+        if (!"openpac".equals(backend.id())) {
+            return;
+        }
+
+        ClaimCapacityContext context = backend.getCapacityContext(player);
+        switch (context.kind()) {
+            case PARTY_OWNER_SHARED -> player.sendSystemMessage(
+                    Component.literal(
+                                    "OpenPAC: this capacity belongs to your player UUID. Because you own the primary party, party-owned claims use this same pool."
+                            )
+                            .withStyle(ChatFormatting.GRAY)
+            );
+            case PARTY_MEMBER_PERSONAL -> {
+                String ownerName = context.partyOwnerName() == null ? "the party owner" : context.partyOwnerName();
+                player.sendSystemMessage(
+                        Component.literal("OpenPAC: this capacity is your personal pool. Party-owned claims use ")
+                                .append(Component.literal(ownerName).withStyle(ChatFormatting.LIGHT_PURPLE))
+                                .append(Component.literal("'s owner pool instead."))
+                                .withStyle(ChatFormatting.GRAY)
+                );
+            }
+            case UNKNOWN -> player.sendSystemMessage(
+                    Component.literal(
+                                    "OpenPAC: party context could not be determined, but the purchase remained bound to your own player UUID."
+                            )
+                            .withStyle(ChatFormatting.YELLOW)
+            );
+            case PERSONAL -> {
+                // No extra message is needed for the ordinary personal case.
+            }
+        }
     }
 
     private static void sendMaximumReached(ServerPlayer player, int maxClaims) {
