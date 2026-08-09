@@ -5,12 +5,16 @@ rm -rf run-openpac-party
 rm -f openpac-party-semantics.log
 
 # Dedicated world for verifying OpenPAC's actual party-owned claim model.
-# All free capacity is disabled so every successful claim in the probe is
-# backed by the exact per-player BONUS_CHUNK_CLAIMS purchased through /buyclaim.
+# Use the built-in "default" party system explicitly. OpenPAC's stock config
+# prefers "ftb_teams" and falls back to default when it is unavailable, but the
+# semantics probe must not depend on that fallback. All free capacity is zero so
+# every successful claim is backed by per-player BONUS_CHUNK_CLAIMS purchased
+# through /buyclaim.
 mkdir -p run-openpac-party/defaultconfigs
 cat > run-openpac-party/defaultconfigs/openpartiesandclaims-server.toml <<'EOF'
 [serverConfig]
 permissionSystem = ""
+primaryPartySystem = "default"
 
 [serverConfig.claims]
 enabled = true
@@ -27,6 +31,7 @@ set -o pipefail
   --no-daemon --console=plain 2>&1 | tee openpac-party-semantics.log
 
 grep -Eq 'All [0-9]+ required tests passed' openpac-party-semantics.log
+grep -Fq 'Configured OPAC to use the following party system as primary: default' openpac-party-semantics.log
 grep -Fq 'OpenPAC party semantics verified:' openpac-party-semantics.log
 grep -Fq 'initialized with openpac backend' openpac-party-semantics.log
 
