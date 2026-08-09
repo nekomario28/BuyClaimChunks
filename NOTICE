@@ -4,10 +4,17 @@ Copyright (c) 2026 nekomario28
 This project is a maintained fork of BuyClaimChunks by SkyAdri:
 https://github.com/SkyAdri-mc/BuyClaimChunks
 
-The original project is published under the MIT License on CurseForge:
+The original project was published under the MIT License on CurseForge:
 https://www.curseforge.com/minecraft/mc-mods/buyclaimchunks
 
 This fork adds NeoForge 1.21.1 support, safer purchase transactions,
-configurable progressive pricing, tests, documentation, and independent
-branding. It is not affiliated with or endorsed by SkyAdri, FTB, Mojang,
-NeoForge, Modrinth, or CurseForge.
+configurable progressive pricing, tests, documentation, independent branding,
+and one universal JAR that can use either FTB Chunks or Open Parties and Claims
+as an externally installed claim-capacity backend.
+
+Neither FTB Chunks nor Open Parties and Claims is bundled or redistributed in
+this JAR. Their licenses and integration details are recorded in
+THIRD_PARTY_NOTICES.md.
+
+BuyClaimChunks Continued is not affiliated with or endorsed by SkyAdri,
+Feed The Beast Ltd, Xaero, Mojang, NeoForge, Modrinth, or CurseForge.

@@ -5,143 +5,92 @@
 <h1 align="center">💎 BuyClaimChunks Continued</h1>
 
 <p align="center">
-  <strong>設定可能なアイテム通貨で、FTB Chunksの個人用追加クレーム枠を購入できるMODです。</strong>
-</p>
-
-<p align="center">
-  <a href="https://github.com/nekomario28/BuyClaimChunks/actions/workflows/build.yml"><img alt="ビルド" src="https://img.shields.io/github/actions/workflow/status/nekomario28/BuyClaimChunks/build.yml?branch=main&style=flat-square&label=build"></a>
-  <img alt="Minecraft 1.21.1" src="https://img.shields.io/badge/Minecraft-1.21.1-62B47A?style=flat-square">
-  <img alt="NeoForge 21.1" src="https://img.shields.io/badge/NeoForge-21.1-EF7E25?style=flat-square">
-  <img alt="Java 21" src="https://img.shields.io/badge/Java-21-ED8B00?style=flat-square&logo=openjdk&logoColor=white">
-  <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/License-MIT-blue?style=flat-square"></a>
-</p>
-
-<p align="center">
-  <img alt="サーバー必須" src="https://img.shields.io/badge/Server-required-C83A3A?style=flat-square">
-  <img alt="クライアント任意" src="https://img.shields.io/badge/Client-optional-6A7FDB?style=flat-square">
+  <strong>設定可能なアイテム通貨で、個人用クレーム枠を購入できるMODです。</strong>
 </p>
 
 <p align="center">
   <a href="README.md">English</a> ·
   <a href="https://modrinth.com/mod/buyclaimchunks-continued">Modrinth</a> ·
   <a href="https://github.com/nekomario28/BuyClaimChunks/releases">Releases</a> ·
-  <a href="https://github.com/nekomario28/BuyClaimChunks/issues">Issues</a> ·
-  <a href="LICENSE">License</a>
+  <a href="LICENSE">MIT License</a>
 </p>
 
----
+BuyClaimChunks Continuedは、Minecraft 1.21.1／NeoForge向けのサーバー経済アドオンです。プレイヤーは`/buyclaim`を使い、設定されたバニラまたは他MODのアイテムを支払って個人用クレーム上限を増やせます。
 
-BuyClaimChunks Continuedは、[FTB Chunks](https://www.curseforge.com/minecraft/mc-mods/ftb-chunks-forge)向けの小規模なサーバー経済アドオンです。プレイヤーは`/buyclaim`を使い、設定されたバニラまたは他MODのアイテムを支払って、**個人用追加クレーム上限**を増やせます。
+1.2.0では、配布JARを**1本に統合**します。次のclaim MODのうち、どちらか一方だけを導入してください。
 
-これは[SkyAdri氏のBuyClaimChunks](https://github.com/SkyAdri-mc/BuyClaimChunks)を独立して継続保守するforkです。元プロジェクトはMIT Licenseで公開されており、本forkは元作者およびFTBによる公式版・公認版ではありません。
+- **FTB Chunks**
+- **Open Parties and Claims（OpenPAC）**
 
-## 📌 ひと目で分かる概要
-
-| | |
-|---|---|
-| **コマンド** | `/buyclaim [個数]` |
-| **動作環境** | サーバー必須、クライアント任意、シングルプレイ対応 |
-| **通貨** | 登録済みの任意のバニラ・他MODアイテム |
-| **価格方式** | 固定価格または段階価格 |
-| **設定ファイル** | `config/buyclaimchunks-common.toml` |
-| **枠データの正本** | FTB Chunksの個人用追加枠値 |
-
-> [!IMPORTANT]
-> このMODが増やすのはクレームの**所有可能枠**です。マップ上のチャンクを自動で保護したり、パーティー共有上限や強制ロード枠を増やしたりするものではありません。
-
-## ✨ 主な機能
-
-- `/buyclaim [個数]`で個人用追加クレーム枠を1個以上まとめて購入できます。
-- バニラ・他MODを問わず、登録済みの任意アイテムを通貨にできます。
-- 固定価格と、現在のFTB Chunks個人追加枠総数に応じた段階価格を選べます。
-- ホットバーを含む36枠の通常インベントリ内にある複数スタックを合算します。
-- 先にFTB Chunks側の枠追加を行い、成功した場合にだけ支払いを消費します。
-- 1コマンドの購入上限と、購入後の個人追加枠総上限を別々に設定できます。
-- 不正なアイテムID、価格オーバーフロー、危険な取引を支払いなしで拒否します。
-- 独自の枠データベースを作らず、FTB Chunksを正本として使用します。
-
-## 📦 対応バージョン
-
-`main`ブランチと本ガイドはMinecraft 1.21.1版を対象にしています。
-
-| 構成要素 | 対応・検証バージョン |
-|---|---|
-| Minecraft | 1.21.1 |
-| NeoForge | 21.1、検証環境は21.1.242 |
-| Java | 21 |
-| FTB Chunks | 2101.1.20以上、2102未満 |
-| FTB Teams | 2101.1.9で検証 |
-| FTB Library | 2101.1.30で検証 |
-| Architectury API | 13.0.8で検証 |
-
-Minecraft 1.20.1 / Forge 47.4向けの旧版は[`forge-1.20.1`](https://github.com/nekomario28/BuyClaimChunks/tree/forge-1.20.1)ブランチに残されています。動作や設定項目が本ガイドと異なる場合があります。
-
-## 🚀 インストール
-
-1. Minecraft 1.21.1向けNeoForgeを導入します。
-2. FTB Chunksと、その必須依存関係であるFTB Library、FTB Teams、Architectury APIを導入します。
-3. [Modrinth](https://modrinth.com/mod/buyclaimchunks-continued)または[GitHub Releases](https://github.com/nekomario28/BuyClaimChunks/releases)から現在のJARを取得します。
-4. JARをサーバーの`mods`フォルダーへ入れます。
-5. サーバーを一度起動し、`config/buyclaimchunks-common.toml`を生成します。
-6. 設定を変更する場合はサーバーを停止してから編集します。
-7. 再起動後、通常プレイヤーで`/buyclaim`を試します。
-
-シングルプレイでは内蔵サーバーがコマンド処理を行うため、通常のインスタンスの`mods`フォルダーへJARを入れてください。
+コマンド、設定、価格曲線、上限、インベントリの扱い、安全な取引手順は、どちらのbackendでも同じです。
 
 > [!WARNING]
-> 本forkは元版と同じ`buyclaimchunks`というmod IDを維持しています。元のBuyClaimChunks JARと同時に導入しないでください。
+> FTB ChunksとOpenPACは、必ずどちらか一方だけを導入してください。両方ある場合、または両方ない場合もサーバーは起動しますが、誤った枠を更新しないよう`/buyclaim`は安全に無効化されます。
 
-## ⚡ すぐに使う
+## 主な機能
 
-既定の通貨は`minecraft:diamond`で、1枠目はダイヤモンド4個です。
+- `/buyclaim`で個人用追加枠を1つ購入できます。
+- `/buyclaim <個数>`で、連続した価格の複数枠を一括購入できます。
+- 登録済みの任意のバニラ・他MODアイテムを通貨にできます。
+- 固定価格または段階価格を設定できます。
+- 後から価格曲線を変更しても、サーバー側の累計消費台帳で再計算します。
+- 値上げ時は既存claimを没収せず、不足額を次回購入へ繰り越します。
+- 値下げ時は、過去の支払いで買える差分を補償枠として付与します。
+- 個人用追加枠の総上限と、1コマンドの購入上限を別々に設定できます。
+- ホットバーを含む通常36スロットから支払いを合算します。
+- 防具スロットとオフハンドは支払いに使いません。
+- backend枠と購入台帳の更新を確認してから支払いを消費します。
+- 管理者による同時変更を古い値で上書きしません。
+- 確認済みの支払いが想定外に失敗した場合は、枠と台帳の両方を元へ戻します。
+- 現在の枠数の正本はFTB ChunksまたはOpenPACです。
+
+このMODが増やすのは**所有可能な枠数**です。現在地を自動claimしたり、強制ロード枠を販売したり、維持費やunclaim返金を追加したりはしません。
+
+## 必要環境
+
+| 構成要素 | 対応バージョン |
+|---|---|
+| Minecraft | 1.21.1 |
+| NeoForge | 21.1.x |
+| Java | 21 |
+| BuyClaimChunks Continued | 統合版1.2.0 JAR 1本 |
+| FTBを使う場合 | FTB Chunks 2101.1.20以上、2102未満、および必須依存 |
+| OpenPACを使う場合 | Open Parties and Claims 0.27.6以上の対応1.21.1系 |
+
+サーバー側は必須、マルチプレイのクライアント側は任意です。シングルプレイでは内蔵サーバーが動くため、通常のインスタンスへ導入します。
+
+## 導入方法
+
+1. Minecraft 1.21.1、NeoForge 21.1.x、Java 21を用意します。
+2. claim MODを**どちらか一方だけ**導入します。
+   - FTB Chunksとその必須依存、または
+   - Open Parties and Claims
+3. `buyclaimchunks-continued-neoforge-1.21.1-1.2.0.jar`を`mods`フォルダーへ入れます。
+4. サーバーを一度起動します。
+5. 設定変更前にサーバーを停止します。
+6. 経済設定を変更します。OpenPACで全枠有料にする場合は、無料base枠も0にします。
+7. 再起動後、通常プレイヤーで`/buyclaim`を確認します。
+
+元のBuyClaimChunksと本forkは同じ`buyclaimchunks` mod IDを使うため、同時に導入できません。
+
+## コマンド
 
 ```text
 /buyclaim
+/buyclaim <個数>
 ```
 
-個人用追加クレーム枠を1個購入します。
+プレイヤーのインベントリから支払うため、サーバーコンソールやコマンドブロックからは実行できません。
 
-```text
-/buyclaim 5
-```
+## 既定設定
 
-次の5枠を1回の取引で購入します。各枠を個別に計算し、5枠分の価格を合計します。
-
-このコマンドは通常プレイヤーが権限なしで使用できます。支払い元となるプレイヤーのインベントリが必要なため、サーバーコンソールやコマンドブロックからは実行できません。
-
-## 🔍 購入後に実際に変わるもの
-
-購入に成功すると、FTB Chunksが保持するプレイヤーの**個人用追加クレーム上限**が増えます。土地の保護自体は、購入後に通常のFTB Chunksマップやクレーム操作から行います。
-
-FTB Chunksを正本として使用するため、次の動作になります。
-
-- 管理者が別途付与した追加枠も、次回購入価格に反映されます。
-- `maxExtraClaims`は、このMODで購入した数だけではなく、FTB Chunks上の個人追加枠総数を制限します。
-- このMODを削除しても、別の枠データベースを移行する必要はありません。
-
-## 🛡️ 取引の安全設計
-
-支払いアイテムは、ホットバーを含む通常インベントリから数えます。防具スロットとオフハンドは対象外です。
-
-処理は次の順序で行われます。
-
-1. FTB Chunksから現在の個人追加枠総数を読み取ります。
-2. 上限を確認し、複数購入を含む総額を計算します。
-3. 設定アイテムが存在するか確認し、プレイヤーの所持数を数えます。
-4. FTB Chunksの枠追加処理を同期実行します。
-5. FTB Chunks側が成功を返した場合にだけ支払いを消費します。
-
-枠追加に失敗した場合、購入は中止され、アイテムは消費されません。
-
-## ⚙️ 設定
-
-設定ファイル：
+生成される設定ファイル：
 
 ```text
 config/buyclaimchunks-common.toml
 ```
 
-既定値：
+新規環境の既定値：
 
 ```toml
 [general]
@@ -153,32 +102,45 @@ maxExtraClaims = 100
 maxPurchaseAmount = 100
 ```
 
-| 項目 | 既定値 | 設定可能範囲 | 意味 |
-|---|---:|---|---|
-| `itemRequired` | `minecraft:diamond` | 登録済みのアイテムID | 支払いアイテムです。`modid:item_name`形式の他MODアイテムも使用できます。 |
-| `amountRequired` | `4` | 1～2,147,483,647 | 基本価格かつ最低価格です。 |
-| `priceGrowthFactor` | `3.45` | 0～1,000,000 | 後半の枠がどの程度速く高くなるかを調整します。`0`で固定価格になります。 |
-| `priceExponent` | `0.5` | 0～4 | 価格曲線の形を調整します。`0.5`は平方根型、`0`は固定価格です。 |
-| `maxExtraClaims` | `100` | 1～2,147,483,647 | 購入後に許可するFTB Chunks個人追加枠総数の上限です。 |
-| `maxPurchaseAmount` | `100` | 1～10,000 | 1回のコマンドで指定できる最大個数です。 |
+| 項目 | 既定値 | 意味 |
+|---|---:|---|
+| `itemRequired` | `minecraft:diamond` | 支払いアイテムの登録ID。他MODなら`modid:item_name`形式です。 |
+| `amountRequired` | `4` | 1枠目の価格であり、1枠あたりの最低価格です。 |
+| `priceGrowthFactor` | `3.45` | 段階価格の上昇の強さ。`0`で固定価格になります。 |
+| `priceExponent` | `0.5` | 曲線の形。`0.5`は平方根型、`0`でも固定価格になります。 |
+| `maxExtraClaims` | `100` | backendが保持する個人追加枠総数の上限。管理者付与分も総上限には含みます。 |
+| `maxPurchaseAmount` | `100` | 1回のコマンドで購入できる最大数です。 |
 
-設定編集前にサーバーを停止してください。存在しないアイテムIDは購入時に検出され、支払いは消費されません。
+既存の設定ファイルは自動で上書きされません。旧環境で`amountRequired = 1`のままなら、現在の既定曲線を使うには手動で4へ変更するか、停止中に設定ファイルを削除して再生成してください。
 
-### 通貨設定の例
+## 設定変更方法
+
+1. Minecraftサーバーを完全に停止します。
+2. `config/buyclaimchunks-common.toml`をバックアップします。
+3. テキストエディターでそのファイルを開きます。
+4. TOML形式を壊さないよう、`=`の右側の値を変更します。
+5. 保存します。
+6. サーバーを起動し直します。
+7. 設定した通貨を持つ通常プレイヤーで`/buyclaim`を試します。
+8. 反映されない場合やアイテムIDエラーが出た場合は`latest.log`を確認します。
+
+ライブリロードは前提にしていません。設定変更後は必ず再起動してください。また、別のMinecraftインスタンスの設定ファイルを編集していないか確認してください。
+
+### 通貨の変更例
+
+エメラルドを使い、価格曲線は既定のまま：
 
 ```toml
-# エメラルド
 itemRequired = "minecraft:emerald"
 ```
 
+他MODのコインを使う：
+
 ```toml
-# 他MODの通貨
 itemRequired = "examplemod:coin"
 ```
 
-### 固定価格の例
-
-すべての枠をエメラルド8個にする設定です。
+全枠をエメラルド8個の固定価格にする：
 
 ```toml
 itemRequired = "minecraft:emerald"
@@ -187,150 +149,145 @@ priceGrowthFactor = 0.0
 priceExponent = 0.5
 ```
 
-`priceGrowthFactor`または`priceExponent`のどちらかを`0`にすると、価格は常に`amountRequired`になります。
+## 既定のコスト曲線
 
-## 📈 段階価格
-
-1から数える個人追加枠番号を`n`とすると、1枠の価格は次の式です。
+1から数える追加枠番号を`n`とすると、1枠の価格は次の式です。
 
 ```text
 round(amountRequired + priceGrowthFactor * (n ^ priceExponent - 1))
 ```
 
-計算結果が`amountRequired`を下回ることはありません。
+既定値では：
 
-| 個人追加枠番号 | 既定の必要アイテム数 |
-|---:|---:|
-| 1 | 4 |
-| 2 | 5 |
-| 3 | 7 |
-| 5 | 8 |
-| 10 | 11 |
-| 50 | 25 |
-| 100 | 35 |
-
-複数購入では、次の枠を順番に計算して合計します。
-
-- 個人追加枠が0の状態で`/buyclaim 5`を実行すると、`4 + 5 + 7 + 7 + 8 = 31`個のダイヤモンドが必要です。
-- 個人追加枠が8の状態で`/buyclaim 3`を実行すると、9～11番目の価格である`11 + 11 + 12 = 34`個が必要です。
-
-## 🧩 互換性
-
-### 元のBuyClaimChunks
-
-元版と本forkはどちらも`buyclaimchunks`というmod IDを使用するため、同時に読み込めません。本forkを導入する前に元版のJARを削除してください。
-
-### Buying Chunks — FTB Chunks Addon
-
-[`snoopypupserr/buying_chunks_ftbchunks_addon`](https://github.com/snoopypupserr/buying_chunks_ftbchunks_addon)を静的検査した範囲では、mod ID、ルートコマンド、設定ファイルの直接衝突は確認されていません。両MODの役割は異なります。
-
-- **BuyClaimChunks Continued**：プレイヤー個人の所有可能枠を販売します。
-- **Buying Chunks**：チャンク市場を提供し、土地をクレームするときにBase Costを課すことができます。
-
-共通するFTB依存MODを互換範囲のバージョンへ揃えれば、併用できる可能性が高い構成です。ただし、Buying Chunksの**Base Cost**を有効にすると、追加枠の購入時と実際の土地クレーム時にそれぞれ支払う二段階経済になります。この動作を意図しない場合はBase Costを無効にしてください。
-
-これはソース上の互換性評価であり、将来のすべてのリリースやMODパック構成を保証するものではありません。Buying Chunksはサーバーと全クライアントへの導入が必要なため、併用時はその要件が適用されます。
-
-## 🔄 元版または1.0からの更新
-
-- 元のBuyClaimChunks JARを先に削除してください。
-- 既存のFTB Chunks個人追加枠値がそのまま正本として使われます。
-- 既存の`buyclaimchunks-common.toml`は維持されます。
-- 旧設定の`amountRequired = 1`を`4`へ変更すると、現在の既定価格曲線を利用できます。
-- またはサーバーを停止し、設定ファイルを削除してから起動すると現在の既定値が再生成されます。
-- 本番サーバーでは、MOD変更前にワールドと設定をバックアップしてください。
-
-## 🛠️ トラブルシュート
-
-<details>
-<summary><strong><code>/buyclaim</code>が存在しない</strong></summary>
-
-Minecraft 1.21.1 / NeoForge版JARがサーバーの`mods`にあるか、FTB依存MODが正常に読み込まれたか、ログに`buyclaimchunks`の重複エラーがないか確認してください。
-</details>
-
-<details>
-<summary><strong>「This command can only be run by a player!」と表示される</strong></summary>
-
-ゲーム内のプレイヤーとして実行してください。コンソールやコマンドブロックには支払い元のインベントリがありません。
-</details>
-
-<details>
-<summary><strong>設定したアイテムが存在しないと表示される</strong></summary>
-
-`itemRequired`のスペルと名前空間、アイテムを追加するMODがサーバーに導入されているかを確認してください。
-</details>
-
-<details>
-<summary><strong>アイテムを持っているのに不足と表示される</strong></summary>
-
-防具スロットやオフハンドから、ホットバーまたは通常インベントリへ移してください。
-</details>
-
-<details>
-<summary><strong>想定より価格が高い</strong></summary>
-
-FTB Chunks上の現在の個人追加枠値を確認してください。管理者から付与された枠も価格上の枠番号に含まれます。
-</details>
-
-<details>
-<summary><strong>「The claim purchase failed. No items were consumed.」と表示される</strong></summary>
-
-内部のFTB Chunks枠追加処理が成功しませんでした。対応バージョンとサーバーログを確認してください。安全設計により支払いは残ります。
-</details>
-
-<details>
-<summary><strong>設定変更が反映されない</strong></summary>
-
-サーバーを停止し、サーバー側の`config/buyclaimchunks-common.toml`を編集・保存して再起動してください。別インスタンスの設定を編集していないかも確認してください。
-</details>
-
-## 🧪 ソースからビルドする
-
-Java 21を使用します。単体テストとリリースJARのビルドを実行します。
-
-```shell
-./gradlew clean test build
+```text
+round(4 + 3.45 * (sqrt(n) - 1))
 ```
 
-NeoForge GameTestサーバーを実行します。
+| 通算枠番号 | その枠の価格 | そこまでの累計 |
+|---:|---:|---:|
+| 1 | 4 | 4 |
+| 2 | 5 | 9 |
+| 3 | 7 | 16 |
+| 5 | 8 | 31 |
+| 10 | 11 | 82 |
+| 20 | 16 | 223 |
+| 50 | 25 | 850 |
+| 100 | 35 | 2,369 |
 
-```shell
-./gradlew runGameTestServer
+一括購入では、次に増える各枠の価格を個別に合計します。
+
+- 購入済み枠0で`/buyclaim 5`：`4 + 5 + 7 + 7 + 8 = 31`個
+- 購入済み枠8で`/buyclaim 3`：9～11枠目の`11 + 11 + 12 = 34`個
+
+価格位置にはBuyClaimChunksの購入台帳を使い、管理者が無料付与した枠は混ぜません。ただし管理者付与分も利用可能なbackend枠を消費するため、`maxExtraClaims`の総上限には含まれます。
+
+## 購入後に価格曲線を変更した場合
+
+サーバーはプレイヤーUUIDごとに、通貨ID、本MODで購入した枠数、実際に消費した累計アイテム数を保存します。
+
+値上げした場合も既存claimは減らしません。次回価格へ、新しい累計価格と過去の累計支払いの差額を加えます。
+
+```text
+次回支払額
+= 新しい曲線で今回購入後の有料枠数までに必要な累計額
+- これまで実際に消費した累計額
 ```
 
-生成されたJARの内容とメタデータを検証します。
+値下げした場合は、過去の支払いで新価格なら買える追加枠を、次の購入成功時に`maxExtraClaims`の範囲で補償します。一度に付与できないcreditは後続価格を無料または安くする形で残ります。
+
+`itemRequired`を変更した場合は異なる通貨の交換比率を自動判断できないため、新しい基準を作ります。数値の価格設定だけを変更した場合は、不足額またはcreditを正確に維持します。
+
+詳しい例と旧ワールドの扱いは[`docs/repricing-ledger_ja.md`](docs/repricing-ledger_ja.md)を参照してください。
+
+## backendごとの動作
+
+### FTB Chunks
+
+プレイヤー個人のFTB Chunks追加クレーム値を更新します。FTB Teamsのパーティー共有枠は増やしません。土地のclaim自体は通常のFTB Chunks操作から行います。
+
+### Open Parties and Claims
+
+OpenPACのプレイヤー別`BONUS_CHUNK_CLAIMS`を更新します。
+
+すべての枠を購入制にする場合、通常はワールド内の次のファイルを編集します。
+
+```text
+<ワールド>/serverconfig/openpartiesandclaims-server.toml
+```
+
+関係する設定例：
+
+```toml
+[serverConfig]
+permissionSystem = ""
+
+[serverConfig.claims]
+enabled = true
+partyOwnedClaims = false
+maxPlayerClaims = 0
+maxPlayerClaimsPermission = ""
+claimBonusPerPartyMember = 0
+claimBonusForPartyOwner = 0
+```
+
+LuckPermsやrank MODなどが別途claim上限を付与していないことも確認してください。本MODは有効なOpenPAC base上限が0でない場合に警告しますが、OpenPAC設定を勝手に書き換えません。
+
+詳しくは[`docs/openpac-setup_ja.md`](docs/openpac-setup_ja.md)を参照してください。
+
+## 安全な取引順序
+
+1. 現在のbackend追加枠と購入台帳を読みます。
+2. 購入数、総上限、オーバーフローを検証します。
+3. 値上げ不足額または値下げcreditと、一括購入価格を計算します。
+4. 通貨アイテムを確認し、所持数を数えます。
+5. backend枠を期待値比較付きで更新し、再読込して確認します。
+6. 引用時点の台帳と一致する場合だけ新しい台帳値へ更新します。
+7. 支払いを消費します。
+8. 支払いが想定外に失敗した場合は、backend枠と台帳の両方を元へ戻します。
+9. 枠・台帳・支払いが確定してから成功を通知します。
+
+拒否された取引ではアイテムを消費しません。
+
+## 統合JARの選択規則
+
+| 導入済みclaim MOD | 動作 |
+|---|---|
+| FTB Chunksのみ | FTB backendを自動選択 |
+| OpenPACのみ | OpenPAC backendを自動選択 |
+| どちらもなし | サーバーは起動、購入機能は無効 |
+| 両方あり | 誤更新防止のためサーバーは起動、購入機能は無効 |
+
+統合JARに含まれるのは本プロジェクトの共通処理と薄いadapterだけです。FTB ChunksやOpenPAC本体は同梱しません。
+
+## ビルドと検証
+
+統合JARをビルド：
 
 ```shell
+./gradlew clean test build -Ptest_backend=none
 bash scripts/verify-release-jar.sh
 ```
 
-JARは次の場所に生成されます。
-
-```text
-build/libs/buyclaimchunks-continued-neoforge-1.21.1-1.1.1.jar
-```
-
-開発用の専用サーバーは次のコマンドで起動できます。
+FTB Chunks環境を検証：
 
 ```shell
-./gradlew runServer
+./gradlew runGameTestServer -Ptest_backend=ftb
+bash scripts/run-ftb-restart-integration.sh
 ```
 
-GitHub Actionsでは単体テスト、完成JAR検査、NeoForge GameTest、クリーンな専用サーバー起動を実行し、Minecraftの`Done`メッセージへ到達することを確認します。プロジェクトのバージョンと一致するタグでは、検証後にGitHub ReleaseとSHA-256チェックサムも公開します。
+OpenPAC環境を検証：
 
-## 🐛 不具合を報告する
+```shell
+./gradlew runGameTestServer -Ptest_backend=openpac
+bash scripts/run-openpac-restart-integration.sh
+```
 
-[Issues](https://github.com/nekomario28/BuyClaimChunks/issues)へ、次の情報を添えて報告してください。
+生成物は`build/libs/`に出力されます。
 
-- Minecraft、NeoForge、FTB Chunks、BuyClaimChunks Continuedの各バージョン。
-- `latest.log`の関係部分またはクラッシュレポート。
-- 実行したコマンドと設定値。
-- 新しく生成した設定でも再現するか。
+## ライセンスと帰属
 
-アカウントトークン、サーバー管理画面のパスワード、非公開アドレスなどは記載しないでください。
+BuyClaimChunks ContinuedはMIT Licenseで公開し、SkyAdri氏によるMIT Licenseの元BuyClaimChunksを継続保守するforkです。
 
-## 📄 ライセンスとクレジット
+FTB ChunksとOpenPACは別途導入する外部MODであり、本JARには再配布しません。FTB ChunksはAll Rights Reserved／visible source、OpenPACはLGPL-3.0-onlyです。詳細は[`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md)と[`docs/license-review.md`](docs/license-review.md)に記録しています。
 
-BuyClaimChunks Continuedは[MIT License](LICENSE)で配布され、**nekomario28**が保守しています。
-
-原作はSkyAdri氏によるものです。帰属表示とforkの詳細は[NOTICE](NOTICE)を参照してください。
+本プロジェクトはSkyAdri氏、Feed The Beast Ltd、Xaero氏、Mojang、NeoForge、Modrinth、CurseForgeによる公式版または公認版ではありません。

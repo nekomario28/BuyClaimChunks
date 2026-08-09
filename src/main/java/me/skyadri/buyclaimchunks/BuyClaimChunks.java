@@ -15,10 +15,20 @@ import org.slf4j.Logger;
 public class BuyClaimChunks {
     public static final String MOD_ID = "buyclaimchunks";
     public static final Logger LOGGER = LogUtils.getLogger();
+    private static ClaimCapacityBackend claimBackend;
 
     public BuyClaimChunks(ModContainer modContainer) {
+        claimBackend = ClaimCapacityBackends.create();
         NeoForge.EVENT_BUS.register(this);
         modContainer.registerConfig(ModConfig.Type.COMMON, Config.SPEC);
+        LOGGER.info("BuyClaimChunks Continued initialized with {} backend", claimBackend.id());
+    }
+
+    public static ClaimCapacityBackend getClaimBackend() {
+        if (claimBackend == null) {
+            throw new IllegalStateException("BuyClaimChunks backend has not been initialized yet.");
+        }
+        return claimBackend;
     }
 
     @SubscribeEvent

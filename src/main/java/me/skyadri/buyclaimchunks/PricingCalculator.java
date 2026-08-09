@@ -54,4 +54,147 @@ public final class PricingCalculator {
         }
         return total;
     }
+
+    /**
+     * Calculates the cumulative price of all claims from one through
+     * {@code claimCount}. Zero claims cost zero.
+     */
+    public static long cumulativePrice(
+            int claimCount,
+            long basePrice,
+            double growthFactor,
+            double exponent
+    ) {
+        if (claimCount < 0) {
+            throw new IllegalArgumentException("Claim count must be non-negative");
+        }
+        if (claimCount == 0) {
+            return 0L;
+        }
+        return totalPrice(0L, claimCount, basePrice, growthFactor, exponent);
+    }
+
+    /**
+     * Finds the largest claim count whose cumulative price does not exceed the
+     * supplied budget. Intended for bounded diagnostics and tests.
+     */
+    public static int maxAffordableClaims(
+            long budget,
+            int maximumClaims,
+            long basePrice,
+            double growthFactor,
+            double exponent
+    ) {
+        if (budget < 0L || maximumClaims < 0) {
+            throw new IllegalArgumentException("Budget and maximum claims must be non-negative");
+        }
+
+        int low = 0;
+        int high = maximumClaims;
+        while (low < high) {
+            int middle = low + (high - low + 1) / 2;
+            long cost = cumulativePrice(middle, basePrice, growthFactor, exponent);
+            if (cost != Long.MAX_VALUE && cost <= budget) {
+                low = middle;
+            } else {
+                high = middle - 1;
+            }
+        }
+        return low;
+    }
+
+    /**
+     * Quotes a purchase against the player's lifetime payment ledger.
+     *
+     * <p>If the active curve became more expensive, {@code carriedDebt} is
+     * included in the next payment. Existing claims are never removed. If the
+     * curve became cheaper, already-spent currency can grant compensation
+     * claims, bounded per transaction by {@code maximumCompensationClaims}.</p>
+     */
+    public static RepricedPurchase quoteRepricedPurchase(
+            int paidClaims,
+            long totalSpent,
+            int purchaseAmount,
+            int maximumCompensationClaims,
+            int maximumClaims,
+            long basePrice,
+            double growthFactor,
+            double exponent
+    ) {
+        if (paidClaims < 0 || totalSpent < 0L || purchaseAmount < 1
+                || maximumCompensationClaims < 0 || maximumClaims < 0) {
+            throw new IllegalArgumentException("Repricing inputs are outside their supported range");
+        }
+        if (paidClaims > maximumClaims || (long) paidClaims + purchaseAmount > maximumClaims) {
+            return RepricedPurchase.overflowResult();
+        }
+
+        long currentCurveCost = cumulativePrice(paidClaims, basePrice, growthFactor, exponent);
+        if (currentCurveCost == Long.MAX_VALUE) {
+            return RepricedPurchase.overflowResult();
+        }
+        long carriedDebt = Math.max(0L, currentCurveCost - totalSpent);
+
+        int compensationLimit = Math.min(
+                maximumCompensationClaims,
+                maximumClaims - paidClaims - purchaseAmount
+        );
+        int compensationClaims = 0;
+        long curveCostAfterCompensation = currentCurveCost;
+        for (int offset = 1; offset <= compensationLimit; offset++) {
+            long claimNumber = (long) paidClaims + offset;
+            long price = priceForClaim(claimNumber, basePrice, growthFactor, exponent);
+            if (price == Long.MAX_VALUE || Long.MAX_VALUE - curveCostAfterCompensation < price) {
+                return RepricedPurchase.overflowResult();
+            }
+
+            long candidateCost = curveCostAfterCompensation + price;
+            if (candidateCost > totalSpent) {
+                break;
+            }
+            curveCostAfterCompensation = candidateCost;
+            compensationClaims++;
+        }
+
+        final int resultingPaidClaims;
+        try {
+            resultingPaidClaims = Math.addExact(
+                    Math.addExact(paidClaims, compensationClaims),
+                    purchaseAmount
+            );
+        } catch (ArithmeticException exception) {
+            return RepricedPurchase.overflowResult();
+        }
+
+        long requestedPurchaseCost = totalPrice(
+                (long) paidClaims + compensationClaims,
+                purchaseAmount,
+                basePrice,
+                growthFactor,
+                exponent
+        );
+        if (requestedPurchaseCost == Long.MAX_VALUE
+                || Long.MAX_VALUE - curveCostAfterCompensation < requestedPurchaseCost) {
+            return RepricedPurchase.overflowResult();
+        }
+        long targetCurveCost = curveCostAfterCompensation + requestedPurchaseCost;
+
+        long paymentRequired = Math.max(0L, targetCurveCost - totalSpent);
+        final long resultingTotalSpent;
+        try {
+            resultingTotalSpent = Math.addExact(totalSpent, paymentRequired);
+        } catch (ArithmeticException exception) {
+            return RepricedPurchase.overflowResult();
+        }
+
+        return new RepricedPurchase(
+                false,
+                compensationClaims,
+                purchaseAmount,
+                resultingPaidClaims,
+                paymentRequired,
+                carriedDebt,
+                resultingTotalSpent
+        );
+    }
 }

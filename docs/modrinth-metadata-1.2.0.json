@@ -1,0 +1,20 @@
+{
+  "project_slug": "buyclaimchunks-continued",
+  "name": "BuyClaimChunks Continued 1.2.0",
+  "version_number": "1.2.0",
+  "version_type": "release",
+  "game_versions": ["1.21.1"],
+  "loaders": ["neoforge"],
+  "environment": "server_only_client_optional",
+  "primary_file": "buyclaimchunks-continued-neoforge-1.21.1-1.2.0.jar",
+  "license": "MIT",
+  "dependencies": [
+    {
+      "project_id": "gF3BGWvG",
+      "name": "Open Parties and Claims",
+      "dependency_type": "optional"
+    }
+  ],
+  "external_backend_note": "FTB Chunks is the alternative optional backend but may need to be installed from an official FTB or CurseForge distribution because no official Modrinth project was resolved during release preparation.",
+  "backend_rule": "Install exactly one of FTB Chunks or Open Parties and Claims. Both or neither safely disables /buyclaim."
+}
