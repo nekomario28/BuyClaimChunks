@@ -38,11 +38,12 @@ For every usable claim slot to come from purchases, the effective OpenPAC base c
 <world>/serverconfig/openpartiesandclaims-server.toml
 ```
 
-4. Set the relevant values:
+4. Set the relevant values. If you use OpenPAC's built-in party system, explicitly select `default` instead of relying on OpenPAC's fallback from another configured party integration:
 
 ```toml
 [serverConfig]
 permissionSystem = ""
+primaryPartySystem = "default"
 
 [serverConfig.claims]
 enabled = true
@@ -51,6 +52,8 @@ maxPlayerClaimsPermission = ""
 claimBonusPerPartyMember = 0
 claimBonusForPartyOwner = 0
 ```
+
+If another supported party integration is intentionally the OpenPAC primary party system, keep that system's registered ID instead of `default`.
 
 5. Ensure no permission plugin, rank, command, or addon grants a non-zero free claim limit.
 6. Restart the server and test with a normal player.
@@ -127,13 +130,29 @@ B leaves party
 
 This avoids capacity duplication or automatic refunds during membership churn.
 
-### Owner transfer
+### Owner transfer — verified behavior
 
-OpenPAC can transfer party ownership. BuyClaimChunks does not automatically move the old owner's or new owner's `BONUS_CHUNK_CLAIMS` or purchase ledger during that operation.
+This behavior is verified under the real OpenPAC 0.29.3 runtime with `primaryPartySystem = "default"` and `partyOwnedClaims = true`.
 
-The 1.2.0 release gate runs the real OpenPAC 0.29.3 transfer command after creating PLAYER claims, PARTY claims, purchases, and separate ledgers for both players. It then verifies the party ID, existing claim owner UUIDs, both bonus values, both ledgers, and the owner UUID used by a new PARTY-mode claim.
+OpenPAC's transfer command changes which player UUID is the party owner, but it does **not** migrate existing claim owner UUIDs, `BONUS_CHUNK_CLAIMS`, or BuyClaimChunks ledgers.
 
-Until that runtime probe passes, BuyClaimChunks does not describe owner transfer as an automatic migration of party assets.
+Example: A owns the party, B is a member, A has an existing PARTY claim, and B has an existing PLAYER claim. After transferring ownership A -> B:
+
+```text
+party UUID                         unchanged
+party owner                        A -> B
+A BONUS_CHUNK_CLAIMS               remains on A
+B BONUS_CHUNK_CLAIMS               remains on B
+A BuyClaimChunks ledger            remains on A
+B BuyClaimChunks ledger            remains on B
+existing A-owned PARTY claim UUID  remains A
+existing B-owned PLAYER claim UUID remains B
+future PARTY claims                use B UUID
+```
+
+OpenPAC determines whether a player's claim set is currently “party-owned” from whether that player UUID is the current primary party owner. Therefore an old owner's existing UUID-bound claims stop being the party-owner set after transfer, while the new owner's pre-existing UUID-bound claims and future PARTY claims share the new owner's claim count and limit.
+
+BuyClaimChunks intentionally does not hide or rewrite this OpenPAC behavior with a second party-account system. Server operators who use owner transfers should understand that transfer is **not** a migration of already claimed land or purchased capacity.
 
 ## BuyClaimChunks default configuration
 
@@ -222,6 +241,7 @@ The universal-JAR release gate requires:
 - member PARTY-mode claims using the owner UUID;
 - member PLAYER-mode claims using the member UUID;
 - member departure not moving bonuses, ledgers, or existing claim ownership;
-- real owner transfer with party ID, claim UUIDs, both bonuses, both ledgers, and subsequent PARTY claim verified;
+- real owner transfer preserving party ID while leaving existing claim owner UUIDs, bonus values, and ledgers UUID-bound;
+- post-transfer PARTY claims using the new owner UUID and sharing the new owner's pre-existing UUID claim count;
 - clean dedicated-server startup;
 - safe startup and no-charge rejection with neither or both backends installed.
