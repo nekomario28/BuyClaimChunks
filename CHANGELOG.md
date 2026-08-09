@@ -9,7 +9,7 @@
 - Extracted command handling, pricing, inventory payment, limit checks, logging, and transaction ordering into a shared purchase core.
 - Added compare-before-write checks so concurrent administrator changes are never overwritten by a stale purchase.
 - Added verified rollback for backend capacity and the purchase ledger when an already validated payment unexpectedly cannot be consumed.
-- Stored OpenPAC purchases in `BONUS_CHUNK_CLAIMS`; FTB Chunks or OpenPAC remains the source of truth for current capacity.
+- Stored OpenPAC purchases in the executing player's `BONUS_CHUNK_CLAIMS`; FTB Chunks or OpenPAC remains the source of truth for current capacity.
 - Added a server-side purchase ledger that records currency ID, paid capacity, and lifetime consumed items per player UUID.
 - Added retroactive numeric-curve reconciliation without claim confiscation:
   - price increases carry the unpaid cumulative difference into the next purchase;
@@ -17,9 +17,18 @@
   - credit that cannot fit under `maxExtraClaims` continues to reduce later prices.
 - Treats a change to `itemRequired` as a new baseline because different currencies have no automatic exchange rate.
 - Added a compatibility baseline for pre-ledger worlds so existing backend capacity keeps its current next-price position and exact tracking begins from the upgrade point.
+- Added OpenPAC primary-party context resolution through OpenPAC's public API instead of assuming the built-in party system.
+- Added verified OpenPAC `partyOwnedClaims=true` behavior without introducing a second party quota:
+  - non-owner `/buyclaim` remains on the non-owner's own UUID and ledger;
+  - PARTY-mode claims use the current primary party owner's UUID/count/limit;
+  - PLAYER-mode claims use the player's own UUID/count/limit;
+  - the owner's PLAYER claims and all PARTY-mode claims share one owner-UUID pool;
+  - join/leave never transfers purchased bonus or ledger state.
+- Verified OpenPAC 0.29.3 owner transfer with the real transfer command: the party ID survives, but existing claim owner UUIDs, both players' `BONUS_CHUNK_CLAIMS`, and both BuyClaimChunks ledgers remain UUID-bound; future PARTY claims use the new owner UUID.
+- Added context notices after OpenPAC purchases so members are told that their purchase remains personal while party-owned claims consume the current owner pool.
 - Added diagnostics for non-zero OpenPAC base claim capacity and non-writable bonus settings without mutating OpenPAC configuration.
-- Added one-JAR inspection, FTB and OpenPAC GameTests, two-process backend and purchase-ledger restart persistence tests, dedicated-server smoke tests, and both/neither-backend startup guards.
-- Added English and Japanese default-configuration, price-curve, repricing-ledger, setting-change, OpenPAC setup, migration, and Modrinth publication documentation.
+- Added one-JAR inspection, FTB and OpenPAC GameTests, two-process backend and purchase-ledger restart persistence tests, OpenPAC party-semantics tests, dedicated-server smoke tests, and both/neither-backend startup guards.
+- Added English and Japanese default-configuration, price-curve, repricing-ledger, setting-change, OpenPAC setup, party ownership, migration, and Modrinth publication documentation.
 - Added third-party license notices while keeping FTB Chunks and OpenPAC external and unbundled.
 
 ### Default economy
@@ -59,8 +68,14 @@ rate.
 
 For an all-paid claim model, configure the effective OpenPAC base claim limit,
 party/member bonuses, owner bonus, and permission/rank overrides to `0`.
-Purchased capacity is stored in the player's effective
-`BONUS_CHUNK_CLAIMS` value.
+Purchased capacity is stored on each executing player's effective
+`BONUS_CHUNK_CLAIMS` value and player-UUID ledger.
+
+With `partyOwnedClaims=true`, BuyClaimChunks does not sum member ledgers or
+create a party account. OpenPAC PARTY mode redirects claim ownership to the
+configured primary party owner's UUID. For OpenPAC's built-in party system,
+set `primaryPartySystem = "default"` explicitly. Owner transfer does not migrate
+existing claim owner UUIDs or BuyClaimChunks/OpenPAC purchase state.
 
 ### Upgrade notes
 
@@ -69,6 +84,7 @@ Purchased capacity is stored in the player's effective
 - Install exactly one backend: FTB Chunks or OpenPAC.
 - On first use after upgrading from a version without the purchase ledger, current backend capacity is treated as already paid at the active curve.
 - Automatic FTB-to-OpenPAC quota migration is not provided, to avoid duplicating capacity while both data sets remain in backups.
+- Enabling OpenPAC party-owned claims does not merge existing member purchase histories into the party owner.
 
 ## 1.1.1 - 2026-07-26
 
