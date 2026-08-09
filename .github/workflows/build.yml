@@ -18,7 +18,7 @@ jobs:
   validate:
     name: Universal JAR validation
     runs-on: buyclaimchunks
-    timeout-minutes: 180
+    timeout-minutes: 210
 
     steps:
       - name: Check out repository
@@ -72,6 +72,9 @@ jobs:
       - name: Run OpenPAC purchase and restart integration
         run: bash scripts/run-openpac-restart-integration.sh
 
+      - name: Verify OpenPAC party ownership semantics
+        run: bash scripts/run-openpac-party-semantics.sh
+
       - name: Smoke test OpenPAC selection
         run: bash scripts/run-backend-server-smoke.sh openpac
 
@@ -108,6 +111,7 @@ jobs:
             build-universal.log
             gametest-ftb.log
             gametest-openpac.log
+            openpac-party-semantics.log
             gametest-none.log
             gametest-both.log
             integration-seed.log
@@ -132,6 +136,7 @@ jobs:
             build-universal.log
             gametest-ftb.log
             gametest-openpac.log
+            openpac-party-semantics.log
             gametest-none.log
             gametest-both.log
             integration-seed.log
@@ -152,5 +157,8 @@ jobs:
             run-integration-openpac/logs/latest.log
             run-integration-openpac/crash-reports/
             run-integration-openpac/**/openpartiesandclaims/**
+            run-openpac-party/logs/latest.log
+            run-openpac-party/crash-reports/
+            run-openpac-party/**/openpartiesandclaims/**
           if-no-files-found: warn
           retention-days: 14
