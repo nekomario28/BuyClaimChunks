@@ -6,6 +6,7 @@ import xaero.pac.common.server.api.OpenPACServerAPI;
 import xaero.pac.common.server.config.ServerConfig;
 import xaero.pac.common.server.parties.party.api.IServerPartyAPI;
 import xaero.pac.common.server.player.config.api.v2.IPlayerConfigAPI;
+import xaero.pac.common.server.player.config.api.v2.IPlayerConfigManagerAPI;
 import xaero.pac.common.server.player.config.api.v2.PlayerConfigOptions;
 
 import java.util.UUID;
@@ -52,36 +53,55 @@ final class OpenPacClaimCapacityBackend implements ClaimCapacityBackend {
         }
 
         try {
-            // OpenPAC's party-owned claiming mode does not create a separate
-            // party quota. PARTY claims are forced to the primary party owner's
-            // player UUID. A regular member's BONUS_CHUNK_CLAIMS therefore
-            // remains their personal PLAYER-mode pool.
+            // OpenPAC PARTY mode uses the configured PRIMARY party system, not
+            // necessarily OpenPAC's built-in/default party manager. Resolve the
+            // owner through the public player-config API because it explicitly
+            // follows that same primary party system.
             if (!ServerConfig.CONFIG.partyOwnedClaims.get()) {
                 return ClaimCapacityContext.personal(playerId);
             }
 
-            IServerPartyAPI party = OpenPACServerAPI.get(server)
-                    .getPartyManager()
-                    .getPartyByMember(playerId);
-            if (party == null) {
+            OpenPACServerAPI api = OpenPACServerAPI.get(server);
+            IPlayerConfigManagerAPI configManager = api.getPlayerConfigManager();
+            IPlayerConfigAPI partyOwnerConfig = configManager.getPartyOwnerConfig(playerId);
+            if (partyOwnerConfig == null || partyOwnerConfig.getPlayerId() == null) {
                 return ClaimCapacityContext.personal(playerId);
             }
 
-            UUID ownerId = party.getOwner().getUUID();
-            String ownerName = party.getOwner().getUsername();
+            UUID ownerId = partyOwnerConfig.getPlayerId();
+
+            // A stable party UUID and owner username are available through the
+            // built-in OpenPAC party manager, but external primary systems such
+            // as FTB Teams do not expose that identity through this API surface.
+            // They are optional informational fields only; owner UUID is the
+            // actual capacity/claim identity used by OpenPAC.
+            UUID partyId = null;
+            String ownerName = null;
+            IServerPartyAPI builtInParty = api.getPartyManager().getPartyByMember(playerId);
+            if (builtInParty != null && builtInParty.getOwner().getUUID().equals(ownerId)) {
+                partyId = builtInParty.getId();
+                ownerName = builtInParty.getOwner().getUsername();
+            }
+
             if (ownerId.equals(playerId)) {
-                return ClaimCapacityContext.ownerShared(playerId, party.getId(), ownerName);
+                return new ClaimCapacityContext(
+                        ClaimCapacityContext.Kind.PARTY_OWNER_SHARED,
+                        playerId,
+                        partyId,
+                        ownerId,
+                        ownerName
+                );
             }
 
             return ClaimCapacityContext.memberPersonal(
                     playerId,
-                    party.getId(),
+                    partyId,
                     ownerId,
                     ownerName
             );
         } catch (RuntimeException exception) {
             BuyClaimChunks.LOGGER.warn(
-                    "Could not determine OpenPAC party ownership context for player {}. Purchases will remain bound to the player's own UUID.",
+                    "Could not determine OpenPAC primary-party ownership context for player {}. Purchases will remain bound to the player's own UUID.",
                     player.getGameProfile().getName(),
                     exception
             );
