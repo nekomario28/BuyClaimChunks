@@ -18,7 +18,7 @@ jobs:
   release:
     name: Validate and publish universal JAR
     runs-on: buyclaimchunks
-    timeout-minutes: 210
+    timeout-minutes: 240
     env:
       RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
 
@@ -81,6 +81,7 @@ jobs:
             -Ptest_backend=openpac \
             --no-daemon --console=plain 2>&1 | tee release-gametest-openpac.log
           bash scripts/run-openpac-restart-integration.sh
+          bash scripts/run-openpac-party-semantics.sh
           bash scripts/run-backend-server-smoke.sh openpac
 
       - name: Validate no-backend fail-closed transaction
@@ -151,6 +152,7 @@ jobs:
             release-build-universal.log
             release-gametest-ftb.log
             release-gametest-openpac.log
+            openpac-party-semantics.log
             release-gametest-none.log
             release-gametest-both.log
             integration-seed.log
@@ -167,5 +169,7 @@ jobs:
             run-integration-openpac/purchase-state.properties
             run-integration-openpac/logs/latest.log
             run-integration-openpac/**/openpartiesandclaims/**
+            run-openpac-party/logs/latest.log
+            run-openpac-party/**/openpartiesandclaims/**
           if-no-files-found: warn
           retention-days: 14
