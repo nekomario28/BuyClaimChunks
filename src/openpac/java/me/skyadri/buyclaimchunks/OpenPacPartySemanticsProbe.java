@@ -77,177 +77,294 @@ final class OpenPacPartySemanticsProbe {
         ResourceLocation dimension = helper.getLevel().dimension().location();
         int baseBlockX = member.blockPosition().getX();
         int baseBlockZ = member.blockPosition().getZ();
-
-        // PARTY mode forces the member's claim to the primary party owner's UUID.
-        int partyClaimResult = execute(
-                member,
-                "openpac-claims party claim " + baseBlockX + " " + baseBlockZ
-        );
-        helper.assertValueEqual(partyClaimResult, 1, "member PARTY-mode claim result");
-        IPlayerChunkClaimAPI partyClaim = claimAt(claimsManager, dimension, baseBlockX, baseBlockZ);
-        helper.assertTrue(partyClaim != null, "member PARTY-mode claim must exist");
-        helper.assertValueEqual(
-                partyClaim.getPlayerId(),
-                originalOwner.getUUID(),
-                "member PARTY-mode claim owner UUID"
-        );
-        helper.assertValueEqual(
-                claimsManager.getPlayerInfo(originalOwner.getUUID()).getClaimCount(),
-                1,
-                "owner UUID claim count after member PARTY claim"
-        );
-        helper.assertValueEqual(
-                claimsManager.getPlayerInfo(member.getUUID()).getClaimCount(),
-                0,
-                "member UUID claim count after member PARTY claim"
-        );
-
-        // PLAYER mode still consumes the member's own separately purchased pool.
         int personalBlockX = baseBlockX + 16;
-        int personalClaimResult = execute(
-                member,
-                "openpac-claims player claim " + personalBlockX + " " + baseBlockZ
-        );
-        helper.assertValueEqual(personalClaimResult, 1, "member PLAYER-mode claim result");
-        IPlayerChunkClaimAPI personalClaim = claimAt(claimsManager, dimension, personalBlockX, baseBlockZ);
-        helper.assertTrue(personalClaim != null, "member PLAYER-mode claim must exist");
-        helper.assertValueEqual(personalClaim.getPlayerId(), member.getUUID(), "member PLAYER-mode owner UUID");
-        helper.assertValueEqual(
-                claimsManager.getPlayerInfo(originalOwner.getUUID()).getClaimCount(),
-                1,
-                "owner UUID count remains one"
-        );
-        helper.assertValueEqual(
-                claimsManager.getPlayerInfo(member.getUUID()).getClaimCount(),
-                1,
-                "member UUID count becomes one"
-        );
-
-        // Leaving a party must not move either player's purchased quota, ledger,
-        // or already-created claims. Only membership/permission context changes.
-        helper.assertTrue(party.removeMember(member.getUUID()) != null, "member must leave test party");
-        helper.assertTrue(
-                backend.getCapacityContext(member).kind() == ClaimCapacityContext.Kind.PERSONAL,
-                "former member purchase context must become PERSONAL"
-        );
-        helper.assertValueEqual(backend.getExtraClaims(originalOwner), 1, "owner bonus after member leaves");
-        helper.assertValueEqual(backend.getExtraClaims(member), 1, "member bonus after leaving");
-        assertLedger(helper, ledger, originalOwner.getUUID(), 1, 4L, "owner ledger after member leaves");
-        assertLedger(helper, ledger, member.getUUID(), 1, 4L, "member ledger after leaving");
-        helper.assertValueEqual(
-                claimAt(claimsManager, dimension, baseBlockX, baseBlockZ).getPlayerId(),
-                originalOwner.getUUID(),
-                "party claim owner after member leaves"
-        );
-        helper.assertValueEqual(
-                claimAt(claimsManager, dimension, personalBlockX, baseBlockZ).getPlayerId(),
-                member.getUUID(),
-                "personal claim owner after member leaves"
-        );
-
-        // Rejoin and transfer ownership through OpenPAC's real transfer command.
-        IPartyMemberAPI rejoinedMember = party.addMember(
-                member.getUUID(),
-                PartyMemberRank.ADMIN,
-                member.getGameProfile().getName()
-        );
-        helper.assertTrue(rejoinedMember != null, "member must rejoin as admin before transfer");
-
-        int transferResult = execute(
-                originalOwner,
-                "openpac-parties transfer " + member.getGameProfile().getName() + " confirm"
-        );
-        helper.assertValueEqual(transferResult, 1, "OpenPAC party owner transfer result");
-
-        IServerPartyAPI transferredParty = partyManager.getPartyById(partyId);
-        helper.assertTrue(transferredParty != null, "party must survive owner transfer");
-        helper.assertValueEqual(transferredParty.getId(), partyId, "party ID across owner transfer");
-        helper.assertValueEqual(
-                transferredParty.getOwner().getUUID(),
-                member.getUUID(),
-                "new OpenPAC party owner"
-        );
-
-        // OpenPAC transfer changes the party owner mapping, not per-player BONUS
-        // values or BuyClaimChunks' per-player economic histories.
-        helper.assertValueEqual(backend.getExtraClaims(originalOwner), 1, "old owner bonus after transfer");
-        helper.assertValueEqual(backend.getExtraClaims(member), 1, "new owner bonus after transfer");
-        assertLedger(helper, ledger, originalOwner.getUUID(), 1, 4L, "old owner ledger after transfer");
-        assertLedger(helper, ledger, member.getUUID(), 1, 4L, "new owner ledger after transfer");
-        helper.assertTrue(
-                backend.getCapacityContext(originalOwner).kind() == ClaimCapacityContext.Kind.PARTY_MEMBER_PERSONAL,
-                "old owner must become member-personal context"
-        );
-        helper.assertTrue(
-                backend.getCapacityContext(member).kind() == ClaimCapacityContext.Kind.PARTY_OWNER_SHARED,
-                "new owner must get owner-shared context"
-        );
-
-        // Existing claims are not rewritten by the transfer command. The old
-        // PARTY claim remains owned by the old owner UUID, while the new owner
-        // already has their earlier PLAYER claim under their own UUID.
-        helper.assertValueEqual(
-                claimAt(claimsManager, dimension, baseBlockX, baseBlockZ).getPlayerId(),
-                originalOwner.getUUID(),
-                "existing party claim owner after owner transfer"
-        );
-        helper.assertValueEqual(
-                claimAt(claimsManager, dimension, personalBlockX, baseBlockZ).getPlayerId(),
-                member.getUUID(),
-                "new owner's pre-transfer personal claim owner"
-        );
-        helper.assertValueEqual(
-                claimsManager.getPlayerInfo(originalOwner.getUUID()).getClaimCount(),
-                1,
-                "old owner count after transfer"
-        );
-        helper.assertValueEqual(
-                claimsManager.getPlayerInfo(member.getUUID()).getClaimCount(),
-                1,
-                "new owner count after transfer"
-        );
-
-        // The new owner's previous personal claim and future PARTY claims share
-        // the same UUID pool. Buy one more slot, then use it for a PARTY claim.
-        payAndBuy(helper, member, 1, 5);
-        helper.assertValueEqual(backend.getExtraClaims(member), 2, "new owner bonus after second purchase");
-        assertLedger(helper, ledger, member.getUUID(), 2, 9L, "new owner ledger after second purchase");
-
         int newOwnerPartyBlockX = baseBlockX + 32;
-        int newOwnerPartyClaimResult = execute(
-                member,
-                "openpac-claims party claim " + newOwnerPartyBlockX + " " + baseBlockZ
-        );
-        helper.assertValueEqual(newOwnerPartyClaimResult, 1, "new owner PARTY-mode claim result");
-        IPlayerChunkClaimAPI newOwnerPartyClaim = claimAt(
-                claimsManager,
-                dimension,
-                newOwnerPartyBlockX,
-                baseBlockZ
-        );
-        helper.assertTrue(newOwnerPartyClaim != null, "new owner PARTY claim must exist");
-        helper.assertValueEqual(
-                newOwnerPartyClaim.getPlayerId(),
-                member.getUUID(),
-                "new owner PARTY claim UUID"
-        );
-        helper.assertValueEqual(
-                claimsManager.getPlayerInfo(member.getUUID()).getClaimCount(),
-                2,
-                "new owner's personal and PARTY claims share one count"
-        );
 
-        BuyClaimChunks.LOGGER.info(
-                "OpenPAC party semantics verified: member purchases stay personal; PARTY claims use the owner UUID; leaving does not move quota/ledger; owner transfer preserves UUID-bound bonus, ledger, and existing claim ownership."
-        );
+        // OpenPAC intentionally suppresses a second claim action by the same
+        // player in the same server tick. Real players naturally cross ticks,
+        // so each command below is staged on a later tick as well.
+        runStage(helper, 2, "member PARTY-mode claim", () -> {
+            int partyClaimResult = execute(
+                    member,
+                    "openpac-claims party claim " + baseBlockX + " " + baseBlockZ
+            );
+            helper.assertValueEqual(partyClaimResult, 1, "member PARTY-mode claim result");
+            IPlayerChunkClaimAPI partyClaim = claimAt(claimsManager, dimension, baseBlockX, baseBlockZ);
+            helper.assertTrue(partyClaim != null, "member PARTY-mode claim must exist");
+            helper.assertValueEqual(
+                    partyClaim.getPlayerId(),
+                    originalOwner.getUUID(),
+                    "member PARTY-mode claim owner UUID"
+            );
+            helper.assertValueEqual(
+                    claimsManager.getPlayerInfo(originalOwner.getUUID()).getClaimCount(),
+                    1,
+                    "owner UUID claim count after member PARTY claim"
+            );
+            helper.assertValueEqual(
+                    claimsManager.getPlayerInfo(member.getUUID()).getClaimCount(),
+                    0,
+                    "member UUID claim count after member PARTY claim"
+            );
 
-        // Clean up direct OpenPAC state so other GameTests in this JVM do not
-        // inherit claims or party membership from this probe.
-        claimsManager.unclaim(dimension, baseBlockX >> 4, baseBlockZ >> 4);
-        claimsManager.unclaim(dimension, personalBlockX >> 4, baseBlockZ >> 4);
-        claimsManager.unclaim(dimension, newOwnerPartyBlockX >> 4, baseBlockZ >> 4);
-        partyManager.removePartyById(partyId);
-        helper.succeed();
+            runStage(helper, 2, "member PLAYER-mode claim", () -> {
+                int personalClaimResult = execute(
+                        member,
+                        "openpac-claims player claim " + personalBlockX + " " + baseBlockZ
+                );
+                helper.assertValueEqual(personalClaimResult, 1, "member PLAYER-mode claim result");
+                IPlayerChunkClaimAPI personalClaim = claimAt(
+                        claimsManager,
+                        dimension,
+                        personalBlockX,
+                        baseBlockZ
+                );
+                helper.assertTrue(personalClaim != null, "member PLAYER-mode claim must exist");
+                helper.assertValueEqual(
+                        personalClaim.getPlayerId(),
+                        member.getUUID(),
+                        "member PLAYER-mode owner UUID"
+                );
+                helper.assertValueEqual(
+                        claimsManager.getPlayerInfo(originalOwner.getUUID()).getClaimCount(),
+                        1,
+                        "owner UUID count remains one"
+                );
+                helper.assertValueEqual(
+                        claimsManager.getPlayerInfo(member.getUUID()).getClaimCount(),
+                        1,
+                        "member UUID count becomes one"
+                );
+
+                runStage(helper, 2, "member departure", () -> {
+                    // Leaving does not move either player's purchased quota,
+                    // ledger, or already-created claims. Only party context changes.
+                    helper.assertTrue(
+                            party.removeMember(member.getUUID()) != null,
+                            "member must leave test party"
+                    );
+                    helper.assertTrue(
+                            backend.getCapacityContext(member).kind() == ClaimCapacityContext.Kind.PERSONAL,
+                            "former member purchase context must become PERSONAL"
+                    );
+                    helper.assertValueEqual(
+                            backend.getExtraClaims(originalOwner),
+                            1,
+                            "owner bonus after member leaves"
+                    );
+                    helper.assertValueEqual(
+                            backend.getExtraClaims(member),
+                            1,
+                            "member bonus after leaving"
+                    );
+                    assertLedger(
+                            helper,
+                            ledger,
+                            originalOwner.getUUID(),
+                            1,
+                            4L,
+                            "owner ledger after member leaves"
+                    );
+                    assertLedger(
+                            helper,
+                            ledger,
+                            member.getUUID(),
+                            1,
+                            4L,
+                            "member ledger after leaving"
+                    );
+                    helper.assertValueEqual(
+                            claimAt(claimsManager, dimension, baseBlockX, baseBlockZ).getPlayerId(),
+                            originalOwner.getUUID(),
+                            "party claim owner after member leaves"
+                    );
+                    helper.assertValueEqual(
+                            claimAt(claimsManager, dimension, personalBlockX, baseBlockZ).getPlayerId(),
+                            member.getUUID(),
+                            "personal claim owner after member leaves"
+                    );
+
+                    runStage(helper, 2, "party owner transfer", () -> {
+                        IPartyMemberAPI rejoinedMember = party.addMember(
+                                member.getUUID(),
+                                PartyMemberRank.ADMIN,
+                                member.getGameProfile().getName()
+                        );
+                        helper.assertTrue(
+                                rejoinedMember != null,
+                                "member must rejoin as admin before transfer"
+                        );
+
+                        int transferResult = execute(
+                                originalOwner,
+                                "openpac-parties transfer "
+                                        + member.getGameProfile().getName()
+                                        + " confirm"
+                        );
+                        helper.assertValueEqual(
+                                transferResult,
+                                1,
+                                "OpenPAC party owner transfer result"
+                        );
+
+                        IServerPartyAPI transferredParty = partyManager.getPartyById(partyId);
+                        helper.assertTrue(transferredParty != null, "party must survive owner transfer");
+                        helper.assertValueEqual(
+                                transferredParty.getId(),
+                                partyId,
+                                "party ID across owner transfer"
+                        );
+                        helper.assertValueEqual(
+                                transferredParty.getOwner().getUUID(),
+                                member.getUUID(),
+                                "new OpenPAC party owner"
+                        );
+
+                        // Transfer changes party-owner mapping. BuyClaimChunks
+                        // intentionally leaves each UUID's bonus and ledger alone.
+                        helper.assertValueEqual(
+                                backend.getExtraClaims(originalOwner),
+                                1,
+                                "old owner bonus after transfer"
+                        );
+                        helper.assertValueEqual(
+                                backend.getExtraClaims(member),
+                                1,
+                                "new owner bonus after transfer"
+                        );
+                        assertLedger(
+                                helper,
+                                ledger,
+                                originalOwner.getUUID(),
+                                1,
+                                4L,
+                                "old owner ledger after transfer"
+                        );
+                        assertLedger(
+                                helper,
+                                ledger,
+                                member.getUUID(),
+                                1,
+                                4L,
+                                "new owner ledger after transfer"
+                        );
+                        helper.assertTrue(
+                                backend.getCapacityContext(originalOwner).kind()
+                                        == ClaimCapacityContext.Kind.PARTY_MEMBER_PERSONAL,
+                                "old owner must become member-personal context"
+                        );
+                        helper.assertTrue(
+                                backend.getCapacityContext(member).kind()
+                                        == ClaimCapacityContext.Kind.PARTY_OWNER_SHARED,
+                                "new owner must get owner-shared context"
+                        );
+
+                        // Existing claims are not assumed to migrate with the
+                        // party identity. Assert the real UUID ownership after
+                        // OpenPAC's transfer command.
+                        helper.assertValueEqual(
+                                claimAt(claimsManager, dimension, baseBlockX, baseBlockZ).getPlayerId(),
+                                originalOwner.getUUID(),
+                                "existing party claim owner after owner transfer"
+                        );
+                        helper.assertValueEqual(
+                                claimAt(claimsManager, dimension, personalBlockX, baseBlockZ).getPlayerId(),
+                                member.getUUID(),
+                                "new owner's pre-transfer personal claim owner"
+                        );
+                        helper.assertValueEqual(
+                                claimsManager.getPlayerInfo(originalOwner.getUUID()).getClaimCount(),
+                                1,
+                                "old owner count after transfer"
+                        );
+                        helper.assertValueEqual(
+                                claimsManager.getPlayerInfo(member.getUUID()).getClaimCount(),
+                                1,
+                                "new owner count after transfer"
+                        );
+
+                        // New owner has one existing PLAYER claim and one bonus.
+                        // Buy a second slot, then prove a later PARTY claim uses
+                        // the same new-owner UUID count.
+                        payAndBuy(helper, member, 1, 5);
+                        helper.assertValueEqual(
+                                backend.getExtraClaims(member),
+                                2,
+                                "new owner bonus after second purchase"
+                        );
+                        assertLedger(
+                                helper,
+                                ledger,
+                                member.getUUID(),
+                                2,
+                                9L,
+                                "new owner ledger after second purchase"
+                        );
+
+                        runStage(helper, 2, "new owner PARTY-mode claim", () -> {
+                            int newOwnerPartyClaimResult = execute(
+                                    member,
+                                    "openpac-claims party claim "
+                                            + newOwnerPartyBlockX
+                                            + " "
+                                            + baseBlockZ
+                            );
+                            helper.assertValueEqual(
+                                    newOwnerPartyClaimResult,
+                                    1,
+                                    "new owner PARTY-mode claim result"
+                            );
+                            IPlayerChunkClaimAPI newOwnerPartyClaim = claimAt(
+                                    claimsManager,
+                                    dimension,
+                                    newOwnerPartyBlockX,
+                                    baseBlockZ
+                            );
+                            helper.assertTrue(
+                                    newOwnerPartyClaim != null,
+                                    "new owner PARTY claim must exist"
+                            );
+                            helper.assertValueEqual(
+                                    newOwnerPartyClaim.getPlayerId(),
+                                    member.getUUID(),
+                                    "new owner PARTY claim UUID"
+                            );
+                            helper.assertValueEqual(
+                                    claimsManager.getPlayerInfo(member.getUUID()).getClaimCount(),
+                                    2,
+                                    "new owner's personal and PARTY claims share one count"
+                            );
+
+                            BuyClaimChunks.LOGGER.info(
+                                    "OpenPAC party semantics verified: member purchases stay personal; PARTY claims use the primary owner UUID; leaving does not move quota/ledger; owner transfer leaves bonus, ledger, and existing claim ownership UUID-bound; future PARTY claims use the new owner UUID."
+                            );
+
+                            claimsManager.unclaim(dimension, baseBlockX >> 4, baseBlockZ >> 4);
+                            claimsManager.unclaim(dimension, personalBlockX >> 4, baseBlockZ >> 4);
+                            claimsManager.unclaim(dimension, newOwnerPartyBlockX >> 4, baseBlockZ >> 4);
+                            partyManager.removePartyById(partyId);
+                            helper.succeed();
+                        });
+                    });
+                });
+            });
+        });
+    }
+
+    private static void runStage(
+            GameTestHelper helper,
+            long delay,
+            String label,
+            ThrowingRunnable stage
+    ) {
+        helper.runAfterDelay(delay, () -> {
+            try {
+                stage.run();
+            } catch (Exception | AssertionError exception) {
+                BuyClaimChunks.LOGGER.error("OpenPAC party semantics stage failed: {}", label, exception);
+                helper.fail("OpenPAC party semantics stage failed (" + label + "): " + exception.getMessage());
+            }
+        });
     }
 
     private static void payAndBuy(
@@ -311,5 +428,10 @@ final class OpenPacPartySemanticsProbe {
         helper.assertValueEqual(account.currencyItemId(), "minecraft:diamond", label + " currency");
         helper.assertValueEqual(account.paidClaims(), paidClaims, label + " paid claims");
         helper.assertValueEqual(account.totalSpent(), totalSpent, label + " total spent");
+    }
+
+    @FunctionalInterface
+    private interface ThrowingRunnable {
+        void run() throws Exception;
     }
 }
