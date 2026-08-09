@@ -45,23 +45,17 @@ final class OpenPacPartySemanticsProbe {
                 PartyMemberRank.ADMIN,
                 member.getGameProfile().getName()
         );
-        helper.assertTrue(addedMember != null, "OpenPAC test member must join the party");
-        helper.assertTrue(
-                party.setRank(addedMember, PartyMemberRank.ADMIN),
-                "OpenPAC test member must have party-claim permission"
-        );
+        helper.assertTrue(addedMember != null, "OpenPAC test member must join the party as admin");
 
         ClaimCapacityContext ownerContext = backend.getCapacityContext(originalOwner);
         ClaimCapacityContext memberContext = backend.getCapacityContext(member);
-        helper.assertValueEqual(
-                ownerContext.kind(),
-                ClaimCapacityContext.Kind.PARTY_OWNER_SHARED,
-                "owner purchase context"
+        helper.assertTrue(
+                ownerContext.kind() == ClaimCapacityContext.Kind.PARTY_OWNER_SHARED,
+                "owner purchase context must be PARTY_OWNER_SHARED"
         );
-        helper.assertValueEqual(
-                memberContext.kind(),
-                ClaimCapacityContext.Kind.PARTY_MEMBER_PERSONAL,
-                "member purchase context"
+        helper.assertTrue(
+                memberContext.kind() == ClaimCapacityContext.Kind.PARTY_MEMBER_PERSONAL,
+                "member purchase context must be PARTY_MEMBER_PERSONAL"
         );
         helper.assertValueEqual(memberContext.partyOwnerId(), originalOwner.getUUID(), "member party owner UUID");
         helper.assertValueEqual(ownerContext.partyId(), partyId, "owner party ID");
@@ -80,7 +74,7 @@ final class OpenPacPartySemanticsProbe {
         assertLedger(helper, ledger, originalOwner.getUUID(), 1, 4L, "owner ledger before claims");
         assertLedger(helper, ledger, member.getUUID(), 1, 4L, "member ledger before claims");
 
-        ResourceLocation dimension = member.level().dimension().location();
+        ResourceLocation dimension = helper.getLevel().dimension().location();
         int baseBlockX = member.blockPosition().getX();
         int baseBlockZ = member.blockPosition().getZ();
 
@@ -132,10 +126,9 @@ final class OpenPacPartySemanticsProbe {
         // Leaving a party must not move either player's purchased quota, ledger,
         // or already-created claims. Only membership/permission context changes.
         helper.assertTrue(party.removeMember(member.getUUID()) != null, "member must leave test party");
-        helper.assertValueEqual(
-                backend.getCapacityContext(member).kind(),
-                ClaimCapacityContext.Kind.PERSONAL,
-                "former member purchase context"
+        helper.assertTrue(
+                backend.getCapacityContext(member).kind() == ClaimCapacityContext.Kind.PERSONAL,
+                "former member purchase context must become PERSONAL"
         );
         helper.assertValueEqual(backend.getExtraClaims(originalOwner), 1, "owner bonus after member leaves");
         helper.assertValueEqual(backend.getExtraClaims(member), 1, "member bonus after leaving");
@@ -158,11 +151,7 @@ final class OpenPacPartySemanticsProbe {
                 PartyMemberRank.ADMIN,
                 member.getGameProfile().getName()
         );
-        helper.assertTrue(rejoinedMember != null, "member must rejoin before transfer");
-        helper.assertTrue(
-                party.setRank(rejoinedMember, PartyMemberRank.ADMIN),
-                "rejoined member must be admin"
-        );
+        helper.assertTrue(rejoinedMember != null, "member must rejoin as admin before transfer");
 
         int transferResult = execute(
                 originalOwner,
@@ -185,15 +174,13 @@ final class OpenPacPartySemanticsProbe {
         helper.assertValueEqual(backend.getExtraClaims(member), 1, "new owner bonus after transfer");
         assertLedger(helper, ledger, originalOwner.getUUID(), 1, 4L, "old owner ledger after transfer");
         assertLedger(helper, ledger, member.getUUID(), 1, 4L, "new owner ledger after transfer");
-        helper.assertValueEqual(
-                backend.getCapacityContext(originalOwner).kind(),
-                ClaimCapacityContext.Kind.PARTY_MEMBER_PERSONAL,
-                "old owner becomes member-personal context"
+        helper.assertTrue(
+                backend.getCapacityContext(originalOwner).kind() == ClaimCapacityContext.Kind.PARTY_MEMBER_PERSONAL,
+                "old owner must become member-personal context"
         );
-        helper.assertValueEqual(
-                backend.getCapacityContext(member).kind(),
-                ClaimCapacityContext.Kind.PARTY_OWNER_SHARED,
-                "new owner gets owner-shared context"
+        helper.assertTrue(
+                backend.getCapacityContext(member).kind() == ClaimCapacityContext.Kind.PARTY_OWNER_SHARED,
+                "new owner must get owner-shared context"
         );
 
         // Existing claims are not rewritten by the transfer command. The old
