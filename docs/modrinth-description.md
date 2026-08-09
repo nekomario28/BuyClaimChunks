@@ -2,7 +2,7 @@
 
 <h1 id="english">BuyClaimChunks Continued</h1>
 
-Buy personal claim capacity with a configurable item currency.
+Buy player-UUID claim capacity with a configurable item currency.
 
 BuyClaimChunks Continued is an independently maintained, MIT-licensed continuation of SkyAdri's BuyClaimChunks for Minecraft 1.21.1 and NeoForge. Version 1.2.0 is distributed as **one universal JAR** that works with either FTB Chunks or Open Parties and Claims.
 
@@ -17,7 +17,7 @@ Do not install both claim mods. If both or neither are present, the server still
 
 ## Features
 
-- `/buyclaim [amount]` purchases one or more personal extra-claim slots.
+- `/buyclaim [amount]` purchases one or more extra-claim slots for the executing player's backend UUID.
 - Same command and configuration for FTB Chunks and OpenPAC.
 - Any registered vanilla or modded item can be used as currency.
 - Fixed pricing or a configurable progressive cost curve.
@@ -77,9 +77,22 @@ When prices rise, existing claims remain untouched and the shortfall is added to
 
 Changing `itemRequired` starts a new baseline because different items do not have a universal exchange rate. Worlds upgraded from a pre-ledger version start exact tracking from their current backend capacity at the active curve.
 
-## OpenPAC all-paid setup
+## OpenPAC all-paid and party behavior
 
-The OpenPAC backend stores purchases in `BONUS_CHUNK_CLAIMS`. To make every claim slot paid, set OpenPAC's effective base claim limit, party/member bonuses, owner bonus, and permission/rank override to zero. Full settings, repricing details, and migration instructions are in the GitHub documentation.
+The OpenPAC backend stores every purchase on the **executing player's own** `BONUS_CHUNK_CLAIMS` and player-UUID purchase ledger. BuyClaimChunks does not create a second party quota or merge member ledgers.
+
+For an all-paid model, set OpenPAC's base claim limit, member/owner bonuses, and permission-derived free capacity to zero. If you use OpenPAC's built-in parties, explicitly use `primaryPartySystem = "default"`; if another supported integration is intentionally primary, keep that integration's registered ID.
+
+With `partyOwnedClaims = true`:
+
+- a non-owner member's `/buyclaim` remains that member's PLAYER-mode capacity;
+- a PARTY-mode claim by any authorized member is owned and counted under the current primary party owner's UUID;
+- the owner's own PLAYER claims and all PARTY-mode claims share the owner's single UUID claim count and limit;
+- joining or leaving never moves BuyClaimChunks bonus or ledger state between UUIDs.
+
+Owner transfer behavior has been verified against OpenPAC 0.29.3. Transferring A -> B keeps the party ID, but does **not** migrate existing claim owner UUIDs, either player's `BONUS_CHUNK_CLAIMS`, or either BuyClaimChunks ledger. Existing A-owned claims remain A-owned; existing B-owned claims remain B-owned; future PARTY claims use B's UUID. OpenPAC then treats B's pre-existing UUID claims and new PARTY claims as the same new-owner pool.
+
+See the GitHub OpenPAC setup guide before enabling party-owned claims or owner transfer on a paid-claim server.
 
 ## Requirements
 
@@ -108,7 +121,7 @@ This project is not affiliated with or endorsed by SkyAdri, Feed The Beast Ltd, 
 
 <h1 id="japanese">日本語</h1>
 
-設定可能なアイテム通貨で、個人用クレーム枠を購入できるMODです。
+設定可能なアイテム通貨で、プレイヤーUUID単位のクレーム枠を購入できるMODです。
 
 BuyClaimChunks Continuedは、SkyAdri氏のBuyClaimChunksをMinecraft 1.21.1／NeoForge向けに独立して継続保守するMIT LicenseのMODです。1.2.0は、FTB ChunksまたはOpen Parties and Claimsのどちらでも使える**統合JAR 1本**として配布します。
 
@@ -123,7 +136,7 @@ BuyClaimChunks Continuedは、SkyAdri氏のBuyClaimChunksをMinecraft 1.21.1／N
 
 ## 機能
 
-- `/buyclaim [個数]`で個人用追加claim枠を購入できます。
+- `/buyclaim [個数]`で実行プレイヤーUUIDの追加claim枠を購入できます。
 - FTB ChunksとOpenPACで同じコマンド・設定を使います。
 - 任意のバニラ・他MODアイテムを通貨にできます。
 - 固定価格または設定可能な段階価格にできます。
@@ -183,9 +196,22 @@ round(amountRequired + priceGrowthFactor * (n ^ priceExponent - 1))
 
 `itemRequired`を変更した場合は、異なる通貨間に共通の交換比率がないため新しい基準を作ります。台帳導入前のワールドは、現在のbackend枠をその時点の曲線で購入済みだったものとして正確な追跡を開始します。
 
-## OpenPACを全枠有料にする
+## OpenPACを全枠有料にする／party-owned claims
 
-OpenPAC版では購入分を`BONUS_CHUNK_CLAIMS`へ保存します。全枠を購入制にする場合、OpenPACの有効base上限、party/member bonus、owner bonus、permission/rank overrideを0にしてください。詳細設定、再価格計算、移行手順はGitHubの日本語ガイドにあります。
+OpenPACでは、購入分を常に**実行プレイヤー自身**の`BONUS_CHUNK_CLAIMS`とUUID単位台帳へ保存します。BuyClaimChunks独自のparty枠やメンバー台帳合算は作りません。
+
+全枠を購入制にする場合、OpenPACのbase上限、member/owner bonus、permission由来の無料枠を0にしてください。OpenPAC標準partyを使うなら`primaryPartySystem = "default"`を明示し、別の対応party連携をprimaryとして使う場合はその登録IDを維持します。
+
+`partyOwnedClaims = true`の場合：
+
+- 一般メンバーの`/buyclaim`は、そのメンバー自身のPLAYER-mode枠です。
+- 権限のあるメンバーがPARTY modeでclaimすると、現在のprimary party owner UUID名義で保存・カウントされます。
+- owner自身のPLAYER claimと、全メンバーのPARTY-mode claimは、owner UUIDの1つのclaim count / limitを共有します。
+- 加入・脱退ではbonusやBuyClaimChunks台帳を別UUIDへ移しません。
+
+OpenPAC 0.29.3でowner移譲も実検証済みです。A→Bへownerを移譲してもparty IDは維持されますが、既存claimの所有UUID、A/Bそれぞれの`BONUS_CHUNK_CLAIMS`、A/BそれぞれのBuyClaimChunks台帳は移動しません。既存A名義claimはAのまま、既存B名義claimはBのまま、移譲後の新規PARTY claimはB UUIDになります。その後は、Bが以前から持つUUID claimと新しいPARTY claimが同じ新owner poolとしてカウントされます。
+
+party-owned claimsやowner移譲を購入制サーバーで使う前に、GitHubのOpenPAC導入ガイドを確認してください。
 
 ## 必要環境
 
