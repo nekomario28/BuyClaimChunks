@@ -38,11 +38,12 @@ BuyClaimChunksの経済台帳もプレイヤーUUID単位です。OpenPACのpart
 <ワールド>/serverconfig/openpartiesandclaims-server.toml
 ```
 
-4. 関係する値を設定します。
+4. 関係する値を設定します。OpenPAC標準partyを使う場合は、別party連携からのfallbackに頼らず`primaryPartySystem = "default"`を明示してください。
 
 ```toml
 [serverConfig]
 permissionSystem = ""
+primaryPartySystem = "default"
 
 [serverConfig.claims]
 enabled = true
@@ -52,7 +53,9 @@ claimBonusPerPartyMember = 0
 claimBonusForPartyOwner = 0
 ```
 
-5. permission MOD、rank、管理コマンド、他addonが0より大きい上限を付与していないことを確認します。
+FTB Teamsや他の対応party連携をOpenPACのprimary party systemとして意図的に使う場合は、`default`ではなくそのsystemの登録IDを維持します。
+
+5. permission MOD、rank、管理コマンド、他addonが0より大きい無料上限を付与していないことを確認します。
 6. サーバーを起動し、通常プレイヤーで確認します。
 
 BuyClaimChunks ContinuedはOpenPAC設定を勝手に書き換えません。有効base上限が0でなければ警告し、その分は無料枠として残ります。
@@ -121,19 +124,35 @@ Bがpartyへ加入
 
 Bがpartyを脱退
 → Bの購入台帳はBのまま
-→ Bのpersonal claimはB名義のまま
+→ BのPLAYER claimはB名義のまま
 → Bが以前PARTY modeで作ったclaimは最初からowner A名義なのでA名義のまま
 ```
 
 この方式により、加入・脱退による購入枠の複製や自動返還を起こしません。
 
-### owner移譲
+### owner移譲 — 実OpenPACで検証済み
 
-OpenPACのparty owner移譲は、partyのowner mappingを変更します。BuyClaimChunksは移譲時に旧ownerと新ownerの`BONUS_CHUNK_CLAIMS`や購入台帳を自動移動しません。
+OpenPAC 0.29.3、`primaryPartySystem = "default"`、`partyOwnedClaims = true`の実runtimeで検証しています。
 
-1.2.0のrelease gateでは、実際のOpenPAC 0.29.3環境で、PARTY claim・PLAYER claim・両プレイヤーのbonus/台帳を作った後に実`openpac-parties transfer ... confirm`を実行し、既存claim所有UUID、party ID、bonus、台帳、移譲後の新規PARTY claimを検証します。
+OpenPACのowner移譲コマンドはpartyのowner UUIDを変更しますが、既存claimの所有UUID、旧owner・新ownerそれぞれの`BONUS_CHUNK_CLAIMS`、BuyClaimChunks購入台帳は自動移動しません。
 
-この実挙動が検証を通るまで、owner移譲を「party資産の自動移行」とは扱いません。
+Aがowner、Bがmemberで、A名義の既存PARTY claimとB名義の既存PLAYER claimがある状態からA→Bへ移譲すると、次の結果になります。
+
+```text
+party UUID                          変化なし
+party owner                         A → B
+A BONUS_CHUNK_CLAIMS                Aに残る
+B BONUS_CHUNK_CLAIMS                Bに残る
+A BuyClaimChunks台帳                Aに残る
+B BuyClaimChunks台帳                Bに残る
+既存A名義PARTY claimの所有UUID      Aのまま
+既存B名義PLAYER claimの所有UUID     Bのまま
+移譲後の新規PARTY claim             B UUID
+```
+
+OpenPACは、そのUUIDが**現在primary party ownerか**によって、そのUUIDのclaim集合をparty-ownedとして扱うかを決めます。そのためowner移譲後は、旧owner Aの既存UUID claimはparty-owner集合ではなくなり、新owner Bが移譲前から持っていたUUID claimと移譲後の新規PARTY claimが同じB UUIDのclaim count / limitを共有します。
+
+BuyClaimChunksはこのOpenPAC本来の挙動を別のparty台帳で隠したり、自動で土地や購入枠を移し替えたりしません。owner移譲を使うサーバーでは、**owner移譲は既存土地・購入済み枠の自動移行ではない**点に注意してください。
 
 ## BuyClaimChunksの既定設定
 
@@ -222,6 +241,7 @@ FTBからOpenPACへの自動枠移行は行いません。バックアップ内�
 - member PARTY claimがowner UUIDへ入ること
 - member PLAYER claimがmember UUIDへ入ること
 - 脱退でbonus・台帳・claim所有UUIDを移動しないこと
-- owner移譲後のparty ID、claim所有UUID、bonus、台帳、新規PARTY claimを実OpenPACコマンドで検証すること
+- owner移譲でparty IDを維持しつつ、既存claim所有UUID・bonus・台帳が各player UUIDに残ること
+- owner移譲後の新規PARTY claimが新owner UUIDになり、新ownerの既存UUID claimと同じclaim countを共有すること
 - dedicated serverの正常起動
 - 両backendなし／両方ありでの安全な起動と購入無効化
