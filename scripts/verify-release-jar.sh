@@ -40,7 +40,10 @@ required_entries=(
   me/skyadri/buyclaimchunks/BuyClaimChunksRepricingGameTests.class
   me/skyadri/buyclaimchunks/BuyClaimChunksRestartIntegrationGameTests.class
   me/skyadri/buyclaimchunks/BuyClaimChunksUnavailableBackendGameTests.class
+  me/skyadri/buyclaimchunks/BuyClaimChunksOpenPacPartyGameTests.class
   me/skyadri/buyclaimchunks/ClaimCapacityBackend.class
+  me/skyadri/buyclaimchunks/ClaimCapacityContext.class
+  me/skyadri/buyclaimchunks/ClaimCapacityContext\$Kind.class
   me/skyadri/buyclaimchunks/ClaimCapacityUpdate.class
   me/skyadri/buyclaimchunks/ClaimCapacityBackends.class
   me/skyadri/buyclaimchunks/PricingCalculator.class
@@ -50,6 +53,7 @@ required_entries=(
   me/skyadri/buyclaimchunks/UnavailableClaimCapacityBackend.class
   me/skyadri/buyclaimchunks/FtbClaimCapacityBackend.class
   me/skyadri/buyclaimchunks/OpenPacClaimCapacityBackend.class
+  me/skyadri/buyclaimchunks/OpenPacPartySemanticsProbe.class
   data/buyclaimchunks/structure/empty.nbt
 )
 
@@ -65,8 +69,8 @@ if grep -Fq 'BuyClaimChunksOpenPacRestartIntegrationGameTests.class' <<<"$entrie
   exit 1
 fi
 
-# The adapters may reference external APIs, but no external backend classes or
-# resources may be copied into this MIT-licensed artifact.
+# The adapters and OpenPAC-only probe may reference external APIs, but no
+# external backend classes or resources may be copied into this MIT artifact.
 for forbidden_prefix in 'dev/ftb/' 'xaero/pac/'; do
   if grep -Fq "$forbidden_prefix" <<<"$entries"; then
     printf 'Universal release JAR unexpectedly bundles external backend content under %s.\n' "$forbidden_prefix" >&2
