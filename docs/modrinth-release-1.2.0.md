@@ -30,15 +30,24 @@ FTB Chunks or OpenPAC remains the source of truth for current claim capacity. Th
 
 ## OpenPAC support
 
-- Stores purchased capacity in OpenPAC `BONUS_CHUNK_CLAIMS`.
+- Stores every purchase on the executing player's own OpenPAC `BONUS_CHUNK_CLAIMS` and player-UUID economic ledger.
 - Supports an all-paid model with OpenPAC base and free bonuses configured to zero.
-- Adds restart-persistence and dedicated-server validation for OpenPAC.
+- Resolves party context through OpenPAC's configured **primary party system**, including external primary systems exposed through OpenPAC's public API.
+- Does not create a separate BuyClaimChunks party quota and does not sum member purchase ledgers.
+- With `partyOwnedClaims=true`, an authorized member's PARTY-mode claim uses the current primary party owner's UUID, count, and limit; the same member's PLAYER-mode claim uses the member's own UUID, count, and limit.
+- The party owner's own PLAYER claims and all PARTY-mode claims share one owner-UUID claim count and limit.
+- Joining or leaving a party never moves `BONUS_CHUNK_CLAIMS`, purchase-ledger state, or existing claim owner UUIDs.
+- Verified OpenPAC 0.29.3 owner transfer behavior: party ID remains stable, but existing claim owner UUIDs, both players' bonus values, and both BuyClaimChunks ledgers remain bound to their original player UUIDs; future PARTY claims use the new owner UUID.
+- Adds real-command party semantics, restart-persistence, and dedicated-server validation for OpenPAC.
+
+For OpenPAC's built-in parties, explicitly set `primaryPartySystem = "default"`. If another supported party integration is intentionally primary, keep that integration's registered ID. For an all-paid model, set `maxPlayerClaims`, `claimBonusPerPartyMember`, `claimBonusForPartyOwner`, and permission-derived free capacity to zero.
 
 ## Safety
 
 - Detects concurrent quota and ledger changes before committing.
 - Verifies backend capacity and compares the ledger snapshot before consuming payment.
 - Attempts a verified rollback of both capacity and ledger state if an already validated payment unexpectedly cannot be consumed.
+- Keeps OpenPAC purchases bound to the executing player's UUID instead of silently redirecting a member's payment to another player.
 - Produces one JAR containing thin API adapters only; FTB Chunks and OpenPAC are not bundled.
 
 ## Default configuration
