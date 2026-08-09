@@ -49,6 +49,7 @@ sourceSets {
 
 def integrationGameDirectory = file("run-integration-${testBackend}")
 def integrationStateFile = new File(integrationGameDirectory, 'purchase-state.properties')
+def openPacPartyGameDirectory = file('run-openpac-party')
 
 neoForge {
     version = project.neo_version
@@ -86,6 +87,15 @@ neoForge {
             systemProperty 'buyclaimchunks.expectedBackend', testBackend
             systemProperty 'buyclaimchunks.integrationPhase', 'verify'
             systemProperty 'buyclaimchunks.integrationStateFile', integrationStateFile.absolutePath
+            disableIdeRun()
+        }
+
+        openPacPartySemantics {
+            type = 'gameTestServer'
+            gameDirectory = openPacPartyGameDirectory
+            systemProperty 'neoforge.enabledGameTestNamespaces', mod_id
+            systemProperty 'buyclaimchunks.expectedBackend', 'openpac'
+            systemProperty 'buyclaimchunks.openpacPartySemantics', 'true'
             disableIdeRun()
         }
 
