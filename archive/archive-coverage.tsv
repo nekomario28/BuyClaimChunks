@@ -1,0 +1,5 @@
+branch	sha	existing_archive_coverage	example_archive_tag
+ci/c2fr-encrypted-bridge	a4400457f5dfd08e23f9379d7abef5f7ad53f673	no	-
+ci/c2fr-encrypted-bridge-trigger	b108fa7304e1271ec0d8a043d71457256ddb4ae3	no	-
+ci/c2fr-encrypted-payload	67cfa8002e5c70d086bc685ec67e864098c25d90	no	-
+test/ftb-purchase-restart-integration	7fdaf011e02abbfda83d733ac7e5f79edaf6373f	no	-
